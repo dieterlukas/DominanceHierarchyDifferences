@@ -45,26 +45,16 @@ colnames(specieslist)<-"species"
 rownames(specieslist)<-specieslist$species
 
 # Load the phylogeny
-phylogeny <- read.nexus("updatedmammaltree.nex")
+phylogeny <- read.nexus("Upham2019MammalPhylogeny.nex")
 
 # check whether the species in our data are the same as the species in the phylogeny
 speciesmatching<-name.check(phylogeny,specieslist)
 # check which species from our data are not in the phylogeny
 speciesmatching$data_not_tree
 
-# for some of these, it's a simply spelling error (eg extra empty space or _ / Macaca maura instead of Macaca maurus) - some have a change in genus name (e.g. Presbytis = Semnopithecus, Sapajus - Cebus
-# Ideally we want to fix this in the input data sheet. But we can also fix this here:
-
-data[data$species=="Cercopithecus_diana_",]$species<-"Cercopithecus_diana"
-data[data$species=="Macaca_maurus",]$species<-"Macaca_maura"
-data[data$species=="Presbytus_entellus",]$species<-"Semnopithecus_entellus"
-data[data$species=="Sapajus_apella",]$species<-"Cebus_apella"
 specieslist<-as.data.frame(matrix(unique(data$species),ncol=1,nrow=length(unique(data$species))))
 colnames(specieslist)<-"species"
 rownames(specieslist)<-specieslist$species
-
-# After fixing these discrepancies, we load the phylogeny again
-phylogeny <- read.nexus("updatedmammaltree.nex")
 
 # and reduce the phylogeny to only include the species for which we have data
 speciesmatching<-name.check(phylogeny,specieslist)
@@ -444,7 +434,7 @@ colnames(specieslist)<-"species"
 rownames(specieslist)<-specieslist$species
 
 # Load the phylogeny
-phylogeny <- read.nexus("updatedmammaltree.nex")
+phylogeny <- read.nexus("Upham2019MammalPhylogeny.nex")
 
 # check whether the species in our data are the same as the species in the phylogeny
 speciesmatching<-name.check(phylogeny,specieslist)
@@ -463,7 +453,7 @@ colnames(specieslist)<-"species"
 rownames(specieslist)<-specieslist$species
 
 # After fixing these discrepancies, we load the phylogeny again
-phylogeny <- read.nexus("updatedmammaltree.nex")
+phylogeny <- read.nexus("Upham2019MammalPhylogeny.nex")
 
 # and reduce the phylogeny to only include the species for which we have data
 speciesmatching<-name.check(phylogeny,specieslist)
