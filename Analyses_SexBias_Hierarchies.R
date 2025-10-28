@@ -24,7 +24,7 @@
 #   9) Are hierarchies steeper for the sex that wins more fights - that is, is the proportion of intersexual fights that females win negatively related to the hierarchy steepness in males, and positively to the hierarchy steepness in females?
 #   
 #   10) Are hierarchies for females more likely to be based on signals whereas those in males more likely to be based on aggression?
-
+ # test lucas
 
 # We first load the required packages
 library(rethinking)
