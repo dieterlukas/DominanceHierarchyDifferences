@@ -209,7 +209,7 @@ precis(contrast_captivity)
 
 
 
-# Analyses for section A - dominance types
+### Analyses for section B - dominance types
 
 #   3) Are hierarchy steepness and linearity correlated across species  / accounting for phylogenetic relatedness and sparseness (which affects both)
 
@@ -273,25 +273,22 @@ precis(contrast_D_A)
 
 
 
+### Analyses for section C - sex-differences 
+#   5) Is hierarchy steepness in males different from that in females (w. or without accounting for phylogenetic relatedness)?
 
-
-
-
-
-
-# first exploration
+# descriptive statistics
 length(unique(data$species)) # 38
 table(data$sex) # 99 datapoint are females, 57 males
-tapply(data$species, data$sex, function(x) length(unique(x))) # F 30; M 19
+tapply(data$species, data$sex, function(x) length(unique(x))) # F 34; M 21 number of species
 table(data$species, data$sex)
-# We have thirty-two species, with more data on females than males.
+# We have thirty-eight species, with more data on females than males.
 # And within the same species, there are different numbers of observations of males and females (see table(data$species, data$sex))
 # Some species have only one sex (females without males).
 
 mean_males <- mean(as.numeric(data$steepness[data$sex == "males"]), na.rm = TRUE)
 mean_females <- mean(as.numeric(data$steepness[data$sex == "females"]), na.rm = TRUE)
 mean_difference <- mean_males - mean_females
-# Well, it seems that with our set of data, the average steepness values are very close.
+# In the raw data, the average steepness values are very close: males 0.81, females 0.84, difference 0.03
 
 male_steepness <- as.numeric(data$steepness[data$sex == "males"])
 female_steepness <- as.numeric(data$steepness[data$sex == "females"])
@@ -307,12 +304,13 @@ legend(x = "topleft", c("Males", "Females"), pch = 19, col = c("#FDE725FF", "#44
 # Indeed, the difference between males and females is not striking.
 
 
+# First model, straight comparison not accounting for potential dependencies among observations in the sample 
 dat_list_steepness <- list(
   steepness = as.numeric(c(female_steepness, male_steepness)),  
   sex = c(rep(1, N_female_observations), rep(2, N_male_observations)))
 
 # a very simple first model
-# [comment from Dieter] : # We assume that there is not one single mean, but two, one for each of the sexes
+# We assume that there is not one single mean, but two, one for each of the sexes, and determine whether these means are estimated to be different
 # We need to provide priors, our expectation of what these values might be. For the means, we could expect that they are somewhere around 0.5
 # For the variance, we expect this to be larger than than zero (so we use the dexp function) and larger than one
 m_steepness <- ulam(
@@ -322,22 +320,23 @@ m_steepness <- ulam(
     a[sex] ~dnorm(0.5,1),   
     variance ~ dexp(10)
   ) , data=dat_list_steepness , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
-
+# We extract samples from the Bayesian model
 post_steepness <- extract.samples(m_steepness)
-# [The likely means - column 1 is for the females and column 2 is for the males (because that's how we coded the data)]
+# We calculated the likely means - column 1 is for the females and column 2 is for the males (because that's how we coded the data)
 post_steepness$a
 # [The likely variance - we assume that the variance is the same for females and for males]
 post_steepness$variance
 # [The model used a logit function to force the mean to be larger than zero. We now reconvert this to the actual steepness scale]
 mean_females <- inv_logit(post_steepness$a[,1])
 mean_males <- inv_logit(post_steepness$a[,2])
+# The means we obtain here are slightly smaller than the means in the raw data (females 0.80, males 0.77) because the model takes into account that our data is not normally distributed but skewed and that values cannot be larger than 1 - but the difference between the values for the females and the males is the same (0.03)
 
+# We calculate whether the estimated means are different or whether the distributions overlap
 difference_steepness <- inv_logit(post_steepness$a[,2]) - inv_logit(post_steepness$a[,1])
 results_steepness<-list(mean_females=mean_females,mean_males=mean_males,difference_steepness=difference_steepness)
 
 precis(results_steepness)
-# With this model, we cross 0 : so the steepness values of the females and males are not different
-
+# With this model, the estimate for the difference in the steepness of females and males crosses 0, meaning one is not consistently larger than the other : so the steepness values of the females and males are not different
 
 
 
@@ -386,79 +385,12 @@ results_steepness<-list(mean_females=mean_females,mean_males=mean_males,differen
 
 # We can now display the results. The inference is that, if the 5.5% - 94.5% interval for the difference does not cross zero, the steepness values of the females and males are different
 precis(results_steepness)
+# When accounting for biases in the sampling, that we have multiple observations from some species but not from others, the difference between females and males declines even further
 
-
-
-
-
-# [Because we now have hierarchical data and more things to keep track of, it makes sense to arrange this in a data frame]
-steepnessdata <- data %>%
-  select(steepness, sex, species) %>%
-  mutate(
-    steepness = as.numeric(steepness),
-    sex = ifelse(sex == "females", 1, 2),
-    species = as.integer(as.factor(species))
-  ) %>%
-  group_by(species, sex) %>%
-  mutate(mean_species_steepness = mean(steepness, na.rm = TRUE)) %>%
-  ungroup()
-
-# [For the analysis, we now want to take into account that observations of steepness for either sex are likely to be more similar when they are from the same species. 
-# We can however not simply account for species identity in this case. In each species, males and females have different social systems. Accordingly, in a given species the steepness values for females and for males can change independently. 
-# Knowing, for example, that in chimpanzees steepness values are lower than the average in males does not provide any information for what the steepness values in female chimpanzees will be. 
-# We therefore need a sex-specific species variable, that groups together only the observations from a single sex in a given species. We can get this by creating a new variable that combines the species name with the sex]
-steepnessdata$sexspecies <- paste(steepnessdata$sex, steepnessdata$species, sep = "_")
-
-N_female_observations <- sum(steepnessdata$sex == 1)
-N_male_observations <- sum(steepnessdata$sex == 2)
-
-# [The symbols now indicate the species, with observations from the same species having the same symbol]
-plot(NA,xlim=c(0,1),ylim=c(0,8),xlab="Steepness",ylab="Frequency")
-lines(density(steepnessdata[steepnessdata$sex==2,]$steepness),col="#FDE725FF",lwd=8)
-lines(density(steepnessdata[steepnessdata$sex==1,]$steepness),col="#443A83FF",lwd=8)
-points(rnorm(N_female_observations, mean = 5, sd = 0.3) ~ steepnessdata$steepness[steepnessdata$sex == 1], bg = "#443A83FF", pch = as.integer(as.factor(steepnessdata$species[steepnessdata$sex == 1])),cex = 2)
-points(rnorm(N_male_observations, mean = 7, sd = 0.3) ~ steepnessdata$steepness[steepnessdata$sex == 2], bg = "#FDE725FF", pch = as.integer(as.factor(steepnessdata$species[steepnessdata$sex == 2])), cex = 2)
-legend(x="topleft",c("males","females"),pch=c(19,19),col=c("#FDE725FF","#443A83FF"),cex=1)
-# Difficult to see clearly because there are already more than 25 species.
 
 
 ##############################################################################
 # Phylogenetic analyses
-
-# Load the data
-setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
-steepnessdata <- read.csv("Comparative_primate_steepness_values.csv")
-
-specieslist<-as.data.frame(matrix(unique(steepnessdata$species),ncol=1,nrow=length(unique(steepnessdata$species))))
-colnames(specieslist)<-"species"
-rownames(specieslist)<-specieslist$species
-
-# Load the phylogeny
-phylogeny <- read.nexus("Upham2019MammalPhylogeny.nex")
-
-# check whether the species in our data are the same as the species in the phylogeny
-speciesmatching<-name.check(phylogeny,specieslist)
-# check which species from our data are not in the phylogeny
-speciesmatching$data_not_tree
-
-# for some of these, it's a simply spelling error (eg extra empty space or _ / Macaca maura instead of Macaca maurus) - some have a change in genus name (e.g. Presbytis = Semnopithecus, Sapajus - Cebus
-# Ideally we want to fix this in the input data sheet. But we can also fix this here:
-
-steepnessdata[steepnessdata$species=="Cercopithecus_diana_",]$species<-"Cercopithecus_diana"
-steepnessdata[steepnessdata$species=="Macaca_maurus",]$species<-"Macaca_maura"
-steepnessdata[steepnessdata$species=="Presbytus_entellus",]$species<-"Semnopithecus_entellus"
-steepnessdata[steepnessdata$species=="Sapajus_apella",]$species<-"Cebus_apella"
-specieslist<-as.data.frame(matrix(unique(steepnessdata$species),ncol=1,nrow=length(unique(steepnessdata$species))))
-colnames(specieslist)<-"species"
-rownames(specieslist)<-specieslist$species
-
-# After fixing these discrepancies, we load the phylogeny again
-phylogeny <- read.nexus("Upham2019MammalPhylogeny.nex")
-
-# and reduce the phylogeny to only include the species for which we have data
-speciesmatching<-name.check(phylogeny,specieslist)
-mtree<-drop.tip(phylogeny,speciesmatching$tree_not_data)
-
 
 # We can now run the models that account for the shared phylogenetic history among species
 # We first check for the phylogenetic signal, assuming that steepness values in females and in males have separate histories
