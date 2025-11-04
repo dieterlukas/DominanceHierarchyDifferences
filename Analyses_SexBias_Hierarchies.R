@@ -394,6 +394,49 @@ precis(results_steepness)
 
 # We can now run the models that account for the shared phylogenetic history among species
 # We first check for the phylogenetic signal, assuming that steepness values in females and in males have separate histories
+steepnessdata<-data
+
+
+specieslist_females<-as.data.frame(matrix(unique(steepnessdata[steepnessdata$sex=="females",]$species),ncol=1,nrow=length(unique(steepnessdata[steepnessdata$sex=="females",]$species))))
+colnames(specieslist_females)<-"species"
+rownames(specieslist_females)<-specieslist_females$species
+speciesmatching_females<-name.check(phylogeny,specieslist_females)
+mtree_females<-drop.tip(phylogeny,speciesmatching_females$tree_not_data)
+data_female<-steepnessdata[steepnessdata$sex=="females",]
+average_species_values_females<-as.data.frame(data_female %>% group_by(species) %>% summarise(meanvalue=mean(steepness)))
+values_females<-average_species_values_females$meanvalue
+names(values_females)<-average_species_values_females$species
+phylosig(mtree_females,values_females,method="lambda",test=TRUE)
+phylosig(mtree_females,values_females,method="K",test=TRUE)
+
+
+specieslist_males<-as.data.frame(matrix(unique(steepnessdata[steepnessdata$sex=="males",]$species),ncol=1,nrow=length(unique(steepnessdata[steepnessdata$sex=="males",]$species))))
+colnames(specieslist_males)<-"species"
+rownames(specieslist_males)<-specieslist_males$species
+speciesmatching_males<-name.check(phylogeny,specieslist_males)
+mtree_males<-drop.tip(phylogeny,speciesmatching_males$tree_not_data)
+data_male<-steepnessdata[steepnessdata$sex=="males",]
+average_species_values_males<-as.data.frame(data_male %>% group_by(species) %>% summarise(meanvalue=mean(steepness)))
+values_males<-average_species_values_males$meanvalue
+names(values_males)<-average_species_values_males$species
+phylosig(mtree_males,values_males,method="lambda",test=TRUE)
+phylosig(mtree_males,values_males,method="K",test=TRUE)
+
+# Plot the values across the phylogeny - there is generally very little variation, but there seems to be that phylogenetic pattern indicated by the phylogenetic signal
+
+plotTree.barplot(mtree_females,values_females)
+plotTree.barplot(mtree_males,values_males)
+
+# The phylogenetic signal is stronger for the female values than for the male values. The lower value for the male values appears to occur because there is relatively little variation among species.
+
+
+
+
+# [For the analysis, we now want to take into account that observations of steepness for either sex are likely to be more similar when they are from the same species. 
+# We can however not simply account for species identity in this case. In each species, males and females have different social systems. Accordingly, in a given species the steepness values for females and for males can change independently. 
+# Knowing, for example, that in chimpanzees steepness values are lower than the average in males does not provide any information for what the steepness values in female chimpanzees will be. 
+# We therefore need a sex-specific species variable, that groups together only the observations from a single sex in a given species. We can get this by creating a new variable that combines the species name with the sex]
+
 
 
 mdata_phylogeny_both <- list(
@@ -440,35 +483,3 @@ contrast_steepness<-as.data.frame(inv_logit(samples_m_steepness_both$a_males)-in
 precis(contrast_steepness)
 
 
-
-# We can also calculate the phylogenetic signal for the steepness values in the two sexes
-
-specieslist_females<-as.data.frame(matrix(unique(steepnessdata[steepnessdata$sex=="females",]$species),ncol=1,nrow=length(unique(steepnessdata[steepnessdata$sex=="females",]$species))))
-colnames(specieslist_females)<-"species"
-rownames(specieslist_females)<-specieslist_females$species
-speciesmatching_females<-name.check(phylogeny,specieslist_females)
-mtree_females<-drop.tip(phylogeny,speciesmatching_females$tree_not_data)
-data_female<-steepnessdata[steepnessdata$sex=="females",]
-average_species_values_females<-as.data.frame(data_female %>% group_by(species) %>% summarise(meanvalue=mean(steepness)))
-values_females<-average_species_values_females$meanvalue
-names(values_females)<-average_species_values_females$species
-phylosig(mtree_females,values_females,method="lambda",test=TRUE)
-phylosig(mtree_females,values_females,method="K",test=TRUE)
-
-
-specieslist_males<-as.data.frame(matrix(unique(steepnessdata[steepnessdata$sex=="males",]$species),ncol=1,nrow=length(unique(steepnessdata[steepnessdata$sex=="males",]$species))))
-colnames(specieslist_males)<-"species"
-rownames(specieslist_males)<-specieslist_males$species
-speciesmatching_males<-name.check(phylogeny,specieslist_males)
-mtree_males<-drop.tip(phylogeny,speciesmatching_males$tree_not_data)
-data_male<-steepnessdata[steepnessdata$sex=="males",]
-average_species_values_males<-as.data.frame(data_male %>% group_by(species) %>% summarise(meanvalue=mean(steepness)))
-values_males<-average_species_values_males$meanvalue
-names(values_males)<-average_species_values_males$species
-phylosig(mtree_males,values_males,method="lambda",test=TRUE)
-phylosig(mtree_males,values_males,method="K",test=TRUE)
-
-# Plot the values across the phylogeny - there is generally very little variation, but there seems to be that phylogenetic pattern indicated by the phylogenetic signal
-
-plotTree.barplot(mtree_females,values_females)
-plotTree.barplot(mtree_males,values_males)
