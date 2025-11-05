@@ -119,7 +119,7 @@ precis(m_steepness_sparseness_duration)
 # 2a) steepness sensitive to number of interactions
 dat_list_steepness_numberofineractions <- list(
   steepness = as.numeric(data$steepness),  
-  numberofineractions = standardize(data$numberofineractions)
+  numberofineractions = log(data$numberofineractions)
 )
 # We need to provide priors, our expectation of what these values might be. For the means, we could expect that they are somewhere around 0.5
 # For the variance, we expect this to be larger than than zero (so we use the dexp function) and larger than one
@@ -163,7 +163,7 @@ plot(data$h_index~data$sparseness)
 # 2b) linearity sensitive to number of interactions
 dat_list_h_index_numberofineractions <- list(
   h_index = as.numeric(data$h_index)-0.0001,  
-  numberofineractions = standardize(data$numberofineractions)
+  numberofineractions = log(data$numberofineractions)
 )
 # We need to provide priors, our expectation of what these values might be. For the means, we could expect that they are somewhere around 0.5
 # For the variance, we expect this to be larger than than zero (so we use the dexp function) and larger than one
@@ -269,7 +269,30 @@ post_steepness_typeofbehaviour<-extract.samples(m_steepness_typeofbehaviour)
 # Comparing D versus A
 contrast_D_A<-post_steepness_typeofbehaviour$b[,3]-post_steepness_typeofbehaviour$b[,1]
 precis(contrast_D_A)
-# No real difference - and AD is actually not in the middle, but the lowest.
+# No real difference - difference is even smaller when accounting for the effect of sparseness on steepness
+
+
+dat_list_linearity_typeofbehaviour <- list(
+  linearity = as.numeric(data$h_index)-0.001,  
+  typeofbehaviour = as.integer(as.factor(data$typeofbehaviour))
+)
+m_linearity_typeofbehaviour <- ulam(
+  alist(
+    linearity ~ dbeta2(mean,variance),
+    logit(mean) <-a + b[typeofbehaviour],
+    a ~dnorm(0.5,1),   
+    b[typeofbehaviour] ~dnorm(0,1),
+    variance ~ dexp(10)
+  ) , data=dat_list_linearity_typeofbehaviour , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+# We check the results - we are interested in the effect measured in the factor b
+precis(m_linearity_typeofbehaviour)
+post_linearity_typeofbehaviour<-extract.samples(m_linearity_typeofbehaviour)
+# Comparing D versus A
+contrast_D_A<-post_linearity_typeofbehaviour$b[,3]-post_linearity_typeofbehaviour$b[,1]
+precis(contrast_D_A)
+# No difference
+
+
 
 
 
@@ -343,7 +366,7 @@ precis(results_steepness)
 #### A more complicated model that accounts for having multiple observations per species
 # [We expect that steepness values for the same sex from the same species are probably similar, because they reflect the same social system]
 
-data$sexspecies<-paste(data$species,data$sex,sep="_")
+data$sexspecies<-paste(data$sex,data$species,sep="_")
 
 # We now combine the data into a list to be used by the model. 
 # Because we have a nested model (populations are nested within species, and entries from species a grouped by whether they are from females or males),
@@ -483,3 +506,337 @@ contrast_steepness<-as.data.frame(inv_logit(samples_m_steepness_both$a_males)-in
 precis(contrast_steepness)
 
 
+# 6) If steepness differs in males and females, can it be linked to the fact that female hierarchies often include more individuals?
+
+# Contrary to our prediction, the more individuals there are in a group, the steeper the hierarchy
+# We though also found that the steepness values of females are on average slightly larger than those of the males, so the number of individuals and the resulting number of interactions might explain the differences in steepness
+
+male_steepness <- as.numeric(data$steepness[data$sex == "males"])
+female_steepness <- as.numeric(data$steepness[data$sex == "females"])
+N_female_observations <- length(female_steepness)
+N_male_observations   <- length(male_steepness)
+individuals = standardize(data$numberofindividuals)
+
+dat_list_steepness_individuals <- list(
+  steepness = as.numeric(c(female_steepness, male_steepness)),  
+  sex = c(rep(1, N_female_observations), rep(2, N_male_observations)),
+  individuals = c(individuals[data$sex=="females"],individuals[data$sex=="males"]))
+
+# We assume that there is not one single mean, but two, one for each of the sexes, and determine whether these means are estimated to be different
+# We need to provide priors, our expectation of what these values might be. For the means, we could expect that they are somewhere around 0.5
+# For the variance, we expect this to be larger than than zero (so we use the dexp function) and larger than one
+m_steepness_individuals <- ulam(
+  alist(
+    steepness ~ dbeta2(mean,variance),
+    logit(mean) <-a[sex]+b*individuals,
+    a[sex] ~dnorm(0.5,1), 
+    b ~ dnorm(0,1),
+    variance ~ dexp(10)
+  ) , data=dat_list_steepness_individuals , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+# We extract samples from the Bayesian model
+post_steepness_individuals <- extract.samples(m_steepness_individuals)
+# We calculated the likely means - column 1 is for the females and column 2 is for the males (because that's how we coded the data)
+post_steepness_individuals$a
+# [The likely variance - we assume that the variance is the same for females and for males]
+post_steepness_individuals$variance
+# [The model used a logit function to force the mean to be larger than zero. We now reconvert this to the actual steepness scale]
+mean_females <- inv_logit(post_steepness_individuals$a[,1])
+mean_males <- inv_logit(post_steepness_individuals$a[,2])
+# The means we obtain here are slightly smaller than the means in the raw data (females 0.80, males 0.77) because the model takes into account that our data is not normally distributed but skewed and that values cannot be larger than 1 - but the difference between the values for the females and the males is the same (0.03)
+
+# We calculate whether the estimated means are different or whether the distributions overlap
+difference_steepness_individuals <- inv_logit(post_steepness_individuals$a[,2]) - inv_logit(post_steepness_individuals$a[,1])
+results_steepness<-list(mean_females=mean_females,mean_males=mean_males,difference_steepness=difference_steepness_individuals)
+
+precis(results_steepness)
+# The difference almost disappears when taking into account that there are more females than males per group
+
+# though it appears that the main influence is not the number of individuals per se, but the number of interactions (usually, when there are more individuals, there are more chances for interactions)
+interactions<-log(data$numberofineractions)
+
+dat_list_steepness_individuals <- list(
+  steepness = as.numeric(c(female_steepness, male_steepness)),  
+  sex = c(rep(1, N_female_observations), rep(2, N_male_observations)),
+  interactions = c(interactions[data$sex=="females"],interactions[data$sex=="males"]))
+
+# We assume that there is not one single mean, but two, one for each of the sexes, and determine whether these means are estimated to be different
+# We need to provide priors, our expectation of what these values might be. For the means, we could expect that they are somewhere around 0.5
+# For the variance, we expect this to be larger than than zero (so we use the dexp function) and larger than one
+m_steepness_individuals <- ulam(
+  alist(
+    steepness ~ dbeta2(mean,variance),
+    logit(mean) <-a[sex]+b*interactions,
+    a[sex] ~dnorm(0.5,1), 
+    b ~ dnorm(0,1),
+    variance ~ dexp(10)
+  ) , data=dat_list_steepness_individuals , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+# We extract samples from the Bayesian model
+
+precis(m_steepness_individuals)
+#  the number of interactions has a very strong positive influence on the steepness
+
+post_steepness_individuals <- extract.samples(m_steepness_individuals)
+
+# [The model used a logit function to force the mean to be larger than zero. We now reconvert this to the actual steepness scale]
+mean_females <- inv_logit(post_steepness_individuals$a[,1])
+mean_males <- inv_logit(post_steepness_individuals$a[,2])
+# The means we obtain here are slightly smaller than the means in the raw data (females 0.80, males 0.77) because the model takes into account that our data is not normally distributed but skewed and that values cannot be larger than 1 - but the difference between the values for the females and the males is the same (0.03)
+
+# We calculate whether the estimated means are different or whether the distributions overlap
+difference_steepness_individuals <- inv_logit(post_steepness_individuals$a[,2]) - inv_logit(post_steepness_individuals$a[,1])
+results_steepness<-list(mean_females=mean_females,mean_males=mean_males,difference_steepness=difference_steepness_individuals)
+
+precis(results_steepness)
+# after accounting for the number of interactions, the values for males and females are very similar and the corrected estimated means are close to 0.5 because the number of interactions absorbed most of the variation in steepness
+
+
+
+### 7) Is hierarchy linearity in males different from that in females (w. or without accounting for phylogenetic relatedness)?
+data$h_index<-data$h_index-0.001
+
+mean_males <- mean(as.numeric(data$h_index[data$sex == "males"]), na.rm = TRUE)
+mean_females <- mean(as.numeric(data$h_index[data$sex == "females"]), na.rm = TRUE)
+mean_difference <- mean_males - mean_females
+# In the raw data, the average h_index values are very close: males 0.81, females 0.81, difference 0.00
+
+male_h_index <- as.numeric(data$h_index[data$sex == "males"])
+female_h_index <- as.numeric(data$h_index[data$sex == "females"])
+N_female_observations <- length(female_h_index)
+N_male_observations   <- length(male_h_index)
+
+plot(NA, xlim = c(0,1), ylim = c(0,7), xlab = "h_index", ylab = "Frequency")
+lines(density(male_h_index, na.rm = TRUE), col = "#FDE725FF", lwd = 8)
+lines(density(female_h_index, na.rm = TRUE), col = "#443A83FF", lwd = 8)
+points(rnorm(N_female_observations,mean=5,sd=0.1)~female_h_index,bg="#443A83FF",pch=21,cex=2)
+points(rnorm(N_male_observations,mean=6,sd=0.1)~male_h_index,bg="#FDE725FF",pch=21,cex=2)
+legend(x = "topleft", c("Males", "Females"), pch = 19, col = c("#FDE725FF", "#443A83FF"), cex = 1)
+# Indeed, the difference between males and females is not striking.
+
+
+# First model, straight comparison not accounting for potential dependencies among observations in the sample 
+dat_list_h_index <- list(
+  h_index = as.numeric(c(female_h_index, male_h_index)),  
+  sex = c(rep(1, N_female_observations), rep(2, N_male_observations)))
+
+# a very simple first model
+# We assume that there is not one single mean, but two, one for each of the sexes, and determine whether these means are estimated to be different
+# We need to provide priors, our expectation of what these values might be. For the means, we could expect that they are somewhere around 0.5
+# For the variance, we expect this to be larger than than zero (so we use the dexp function) and larger than one
+m_h_index <- ulam(
+  alist(
+    h_index ~ dbeta2(mean,variance),
+    logit(mean) <-a[sex],
+    a[sex] ~dnorm(0.5,1),   
+    variance ~ dexp(10)
+  ) , data=dat_list_h_index , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+# We extract samples from the Bayesian model
+post_h_index <- extract.samples(m_h_index)
+# We calculated the likely means - column 1 is for the females and column 2 is for the males (because that's how we coded the data)
+post_h_index$a
+# [The likely variance - we assume that the variance is the same for females and for males]
+post_h_index$variance
+# [The model used a logit function to force the mean to be larger than zero. We now reconvert this to the actual h_index scale]
+mean_females <- inv_logit(post_h_index$a[,1])
+mean_males <- inv_logit(post_h_index$a[,2])
+# The means we obtain here are slightly smaller than the means in the raw data (females 0.80, males 0.77) because the model takes into account that our data is not normally distributed but skewed and that values cannot be larger than 1 - but the difference between the values for the females and the males is the same (0.03)
+
+# We calculate whether the estimated means are different or whether the distributions overlap
+difference_h_index <- inv_logit(post_h_index$a[,2]) - inv_logit(post_h_index$a[,1])
+results_h_index<-list(mean_females=mean_females,mean_males=mean_males,difference_h_index=difference_h_index)
+
+precis(results_h_index)
+# With this model, the estimate for the difference in the h_index of females and males crosses 0, meaning one is not consistently larger than the other : so the h_index values of the females and males are not different
+
+
+
+#### A more complicated model that accounts for having multiple observations per species
+# [We expect that h_index values for the same sex from the same species are probably similar, because they reflect the same social system]
+
+data$sexspecies<-paste(data$sex,data$species,sep="_")
+
+# We now combine the data into a list to be used by the model. 
+# Because we have a nested model (populations are nested within species, and entries from species a grouped by whether they are from females or males),
+# the entries in the list do not all come from the raw data frame, but reflect this nested structured
+# That means that we designate the sex for each of the species entries rather than for each of the h_index values. We can get the number of entries from the table.
+dat_list_h_index_species <- list(
+  h_index = data$h_index,  # we have the h_index values in a long line, first for the females than the males
+  sex = c(rep(1,tapply(data$species, data$sex, function(x) length(unique(x))) [1]),rep(2,tapply(data$species, data$sex, function(x) length(unique(x))) [2])), # we now provide the identifier that describes for each of the h_index values in the list whether it is an observation from a female (1) or a male (2) hierarchy,
+  species = as.integer(as.factor(data$sexspecies))
+)
+
+# We now build our model. Again, our model goes through the steps that we used to simulate the data in reverse.
+# We first assume that the h_index values come from the beta distribution with means and variances
+# There is not a single mean, but a distribution that reflects that each species/sex combination can be different
+# all the species-specific means for the females however should be similar, same as the species-specific means for the males, so we set is such that there are two overall means,
+m_h_index_species <- ulam(
+  alist(
+    h_index ~ dbeta2(overallmean,amongspeciesvariance),
+    logit(overallmean) <-b[species],
+    b[species]~dnorm(sexspecificmean,withinspeciesvariance),
+    sexspecificmean<-a[sex],
+    a[sex]~dnorm(0.5,1),
+    withinspeciesvariance~dexp(1),
+    amongspeciesvariance~dexp(0.5)
+  ) , data=dat_list_h_index_species , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+
+
+
+# This is a Bayesian model, so the inference is based on sampling from the most likely space of solutions. We now work with these samples. We first extract a subset of the samples 
+post_h_index_species <- extract.samples(m_h_index_species)
+
+# We calculate the estimated mean for the females and the males. The model used a logit function to force the mean to be larger than zero. We now reconvert this to the actual h_index scale
+mean_females <- inv_logit(post_h_index_species$a[,1])
+mean_males <- inv_logit(post_h_index_species$a[,2])
+
+# Next, we calculate the difference between the estimated mean for the males and the estimated mean for the females
+difference_h_index <- inv_logit(post_h_index_species$a[,2]) - inv_logit(post_h_index_species$a[,1])
+results_h_index<-list(mean_females=mean_females,mean_males=mean_males,difference_h_index=difference_h_index)
+
+# We can now display the results. The inference is that, if the 5.5% - 94.5% interval for the difference does not cross zero, the h_index values of the females and males are different
+precis(results_h_index)
+# When accounting for biases in the sampling, that we have multiple observations from some species but not from others, there appears to be a difference in the linearity: females have more linear hierarchies than males (note, this is still without accounting for sparseness)
+
+
+
+##############################################################################
+# Phylogenetic analyses
+
+# We can now run the models that account for the shared phylogenetic history among species
+# We first check for the phylogenetic signal, assuming that h_index values in females and in males have separate histories
+h_indexdata<-data
+
+
+specieslist_females<-as.data.frame(matrix(unique(h_indexdata[h_indexdata$sex=="females",]$species),ncol=1,nrow=length(unique(h_indexdata[h_indexdata$sex=="females",]$species))))
+colnames(specieslist_females)<-"species"
+rownames(specieslist_females)<-specieslist_females$species
+speciesmatching_females<-name.check(phylogeny,specieslist_females)
+mtree_females<-drop.tip(phylogeny,speciesmatching_females$tree_not_data)
+data_female<-h_indexdata[h_indexdata$sex=="females",]
+average_species_values_females<-as.data.frame(data_female %>% group_by(species) %>% summarise(meanvalue=mean(h_index)))
+values_females<-average_species_values_females$meanvalue
+names(values_females)<-average_species_values_females$species
+phylosig(mtree_females,values_females,method="lambda",test=TRUE)
+phylosig(mtree_females,values_females,method="K",test=TRUE)
+
+
+specieslist_males<-as.data.frame(matrix(unique(h_indexdata[h_indexdata$sex=="males",]$species),ncol=1,nrow=length(unique(h_indexdata[h_indexdata$sex=="males",]$species))))
+colnames(specieslist_males)<-"species"
+rownames(specieslist_males)<-specieslist_males$species
+speciesmatching_males<-name.check(phylogeny,specieslist_males)
+mtree_males<-drop.tip(phylogeny,speciesmatching_males$tree_not_data)
+data_male<-h_indexdata[h_indexdata$sex=="males",]
+average_species_values_males<-as.data.frame(data_male %>% group_by(species) %>% summarise(meanvalue=mean(h_index)))
+values_males<-average_species_values_males$meanvalue
+names(values_males)<-average_species_values_males$species
+phylosig(mtree_males,values_males,method="lambda",test=TRUE)
+phylosig(mtree_males,values_males,method="K",test=TRUE)
+
+# Plot the values across the phylogeny - there is generally very little variation, but there seems to be that phylogenetic pattern indicated by the phylogenetic signal
+
+plotTree.barplot(mtree_females,values_females)
+plotTree.barplot(mtree_males,values_males)
+
+# For linearity, there is no real phylogenetic signal, what little there is is stronger in males than in females. In this case, the signal appears absent not because there is no variatio in linearity, but because closely related species can differ as much as more distantly related species.
+
+
+
+# [For the analysis, we now want to take into account that observations of h_index for either sex are likely to be more similar when they are from the same species. 
+# We can however not simply account for species identity in this case. In each species, males and females have different social systems. Accordingly, in a given species the h_index values for females and for males can change independently. 
+# Knowing, for example, that in chimpanzees h_index values are lower than the average in males does not provide any information for what the h_index values in female chimpanzees will be. 
+# We therefore need a sex-specific species variable, that groups together only the observations from a single sex in a given species. We can get this by creating a new variable that combines the species name with the sex]
+
+
+
+mdata_phylogeny_both <- list(
+  h_index_females=h_indexdata[h_indexdata$sex=="females",]$h_index,
+  species_females=as.integer(as.factor((h_indexdata[h_indexdata$sex=="females",]$species))),
+  N_spp_females=length(unique(h_indexdata[h_indexdata$sex=="females",]$species)),
+  h_index_males=h_indexdata[h_indexdata$sex=="males",]$h_index,
+  species_males=as.integer(as.factor((h_indexdata[h_indexdata$sex=="males",]$species))),
+  N_spp_males=length(unique(h_indexdata[h_indexdata$sex=="males",]$species))
+)
+
+Dmat<-cophenetic(mtree)
+mdata_phylogeny_both$Dmat_females<-Dmat[ unique(h_indexdata[h_indexdata$sex=="females",]$species),unique(h_indexdata[h_indexdata$sex=="females",]$species) ]/max(Dmat)
+colnames(mdata_phylogeny_both$Dmat_females)<-as.integer(as.factor(colnames(mdata_phylogeny_both$Dmat_females)))
+rownames(mdata_phylogeny_both$Dmat_females)<-as.integer(as.factor(rownames(mdata_phylogeny_both$Dmat_females)))
+mdata_phylogeny_both$Dmat_males<-Dmat[ unique(h_indexdata[h_indexdata$sex=="males",]$species),unique(h_indexdata[h_indexdata$sex=="males",]$species) ]/max(Dmat)
+colnames(mdata_phylogeny_both$Dmat_males)<-as.integer(as.factor(colnames(mdata_phylogeny_both$Dmat_males)))
+rownames(mdata_phylogeny_both$Dmat_males)<-as.integer(as.factor(rownames(mdata_phylogeny_both$Dmat_males)))
+
+
+m_h_index_both <- ulam(
+  alist(
+    h_index_males ~ dbeta2(mean_males,variance_males),
+    logit(mean_males) <-a_males+b_males[species_males],
+    a_males ~dnorm(0,1),
+    vector[N_spp_males]:b_males~multi_normal(0,SIGMA_males),
+    matrix[N_spp_males,N_spp_males]: SIGMA_males <- cov_GPL2( Dmat_males , etasq_m , rhosq_m , 0.01 ),
+    etasq_m ~ half_normal(1,0.25),
+    rhosq_m ~ half_normal(3,0.25),
+    variance_males~dexp(10),
+    h_index_females ~ dbeta2(mean_females,variance_females),
+    logit(mean_females) <-a_females+b_females[species_females],
+    a_females ~dnorm(0,1),
+    vector[N_spp_females]:b_females~multi_normal(0,SIGMA_females),
+    matrix[N_spp_females,N_spp_females]: SIGMA_females <- cov_GPL2( Dmat_females , etasq_f , rhosq_f , 0.01 ),
+    etasq_f ~ half_normal(1,0.25),
+    rhosq_f ~ half_normal(3,0.25),
+    variance_females~dexp(10)
+  ) , data=mdata_phylogeny_both , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+
+
+samples_m_h_index_both<-extract.samples(m_h_index_both)
+contrast_h_index<-as.data.frame(inv_logit(samples_m_h_index_both$a_males)-inv_logit(samples_m_h_index_both$a_females))
+precis(contrast_h_index)
+
+
+
+
+#### A more complicated model that accounts for having multiple observations per species
+# [We expect that h_index values for the same sex from the same species are probably similar, because they reflect the same social system] 
+# and accounting that sparseness affects the estimate
+
+data$sexspecies<-paste(data$sex,data$species,sep="_")
+
+# We now combine the data into a list to be used by the model. 
+# Because we have a nested model (populations are nested within species, and entries from species a grouped by whether they are from females or males),
+# the entries in the list do not all come from the raw data frame, but reflect this nested structured
+# That means that we designate the sex for each of the species entries rather than for each of the h_index values. We can get the number of entries from the table.
+dat_list_h_index_species <- list(
+  h_index = data$h_index,  # we have the h_index values in a long line, first for the females than the males
+  sex = c(rep(1,tapply(data$species, data$sex, function(x) length(unique(x))) [1]),rep(2,tapply(data$species, data$sex, function(x) length(unique(x))) [2])), # we now provide the identifier that describes for each of the h_index values in the list whether it is an observation from a female (1) or a male (2) hierarchy,
+  species = as.integer(as.factor(data$sexspecies)),
+  sparseness = data$sparseness
+)
+
+# We now build our model. Again, our model goes through the steps that we used to simulate the data in reverse.
+# We first assume that the h_index values come from the beta distribution with means and variances
+# There is not a single mean, but a distribution that reflects that each species/sex combination can be different
+# all the species-specific means for the females however should be similar, same as the species-specific means for the males, so we set is such that there are two overall means,
+m_h_index_species <- ulam(
+  alist(
+    h_index ~ dbeta2(overallmean,amongspeciesvariance),
+    logit(overallmean) <-b[species]+c*sparseness,
+    b[species]~dnorm(sexspecificmean,withinspeciesvariance),
+    sexspecificmean<-a[sex],
+    a[sex]~dnorm(0.5,1),
+    c~dnorm(0,1),
+    withinspeciesvariance~dexp(1),
+    amongspeciesvariance~dexp(0.5)
+  ) , data=dat_list_h_index_species , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+
+
+# This is a Bayesian model, so the inference is based on sampling from the most likely space of solutions. We now work with these samples. We first extract a subset of the samples 
+post_h_index_species <- extract.samples(m_h_index_species)
+
+# We calculate the estimated mean for the females and the males. The model used a logit function to force the mean to be larger than zero. We now reconvert this to the actual h_index scale
+mean_females <- inv_logit(post_h_index_species$a[,1])
+mean_males <- inv_logit(post_h_index_species$a[,2])
+
+# Next, we calculate the difference between the estimated mean for the males and the estimated mean for the females
+difference_h_index <- inv_logit(post_h_index_species$a[,2]) - inv_logit(post_h_index_species$a[,1])
+results_h_index<-list(mean_females=mean_females,mean_males=mean_males,difference_h_index=difference_h_index)
+
+# We can now display the results. The inference is that, if the 5.5% - 94.5% interval for the difference does not cross zero, the h_index values of the females and males are different
+precis(results_h_index)
