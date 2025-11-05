@@ -840,3 +840,110 @@ results_h_index<-list(mean_females=mean_females,mean_males=mean_males,difference
 
 # We can now display the results. The inference is that, if the 5.5% - 94.5% interval for the difference does not cross zero, the h_index values of the females and males are different
 precis(results_h_index)
+
+
+
+#   8) Is hierarchy linearity linked to hierarchy steepness in the same way in males and in females?
+
+
+
+mdata_sex_steepness_linearity <- list(
+  femalesteepness=as.numeric(data[data$sex=="females",]$steepness),
+  malesteepness=as.numeric(data[data$sex=="males",]$steepness),
+  femalelinearity=standardize(data[data$sex=="females",]$h_index),
+  malelinearity=standardize(data[data$sex=="males",]$h_index),
+  femalesparseness=standardize(data[data$sex=="females",]$sparseness),
+  malesparseness=standardize(data[data$sex=="males",]$sparseness)
+)
+
+
+m_sex_steepness_linearity <- ulam(
+  alist(
+    femalesteepness ~ dbeta2(femalemean,femalevariance),
+    logit(femalemean) <-af+b*femalesparseness+cf*femalelinearity,
+    malesteepness ~ dbeta2(malemean,malevariance),
+    logit(malemean) <-am+b*malesparseness+(cf+maleoffset)*malelinearity,
+    c(af,am)~dnorm(0,1),
+    b~dnorm(0,1),
+    cf~dnorm(0,1),
+    maleoffset~dnorm(0,1),
+    femalevariance~dexp(10),
+    malevariance~dexp(10)
+  ) , data=mdata_sex_steepness_linearity , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+
+precis(m_sex_steepness_linearity)
+# the estimate for the male offset is not different from zero, suggesting that the relationship between linearity and steepness is identical in males and females
+
+plot(data[data$sex=="females",]$steepness~data[data$sex=="females",]$h_index,col="purple")
+points(data[data$sex=="males",]$steepness~data[data$sex=="males",]$h_index,col="darkgreen",pch=16)
+# Linearity and steepness are positively correlated
+
+
+
+
+#   
+#   9) Are hierarchies steeper for the sex that wins more fights - that is, is the proportion of intersexual fights that females win negatively related to the hierarchy steepness in males, and positively to the hierarchy steepness in females?
+
+
+
+mdata_sex_steepness_dominance <- list(
+  femalesteepness=as.numeric(data[data$sex=="females",]$steepness),
+  malesteepness=as.numeric(data[data$sex=="males",]$steepness),
+  dominance_femalevalues=standardize(data[data$sex=="females",]$prop_win_females),
+  dominance_malevalues=standardize(data[data$sex=="males",]$prop_win_females),
+  femalesparseness=standardize(data[data$sex=="females",]$sparseness),
+  malesparseness=standardize(data[data$sex=="males",]$sparseness)
+)
+
+m_sex_steepness_dominance <- ulam(
+  alist(
+    femalesteepness ~ dbeta2(femalemean,femalevariance),
+    logit(femalemean) <-af+b*femalesparseness+cf*dominance_femalevalues,
+    malesteepness ~ dbeta2(malemean,malevariance),
+    logit(malemean) <-am+b*malesparseness+cm*dominance_malevalues,
+    c(af,am)~dnorm(0,1),
+    b~dnorm(0,1),
+    cf~dnorm(0,1),
+    cm~dnorm(0,1),
+    maleoffset~dnorm(0,1),
+    femalevariance~dexp(10),
+    malevariance~dexp(10)
+  ) , data=mdata_sex_steepness_dominance , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+
+# Check whether cf is positive and cm is negative
+precis(m_sex_steepness_dominance)
+# Determine whether the values are different from each other
+posterior_sex_steepness_dominance<-extract.samples(m_sex_steepness_dominance)
+contrast<-inv_logit(posterior_sex_steepness_dominance$cf-posterior_sex_steepness_dominance$cm)
+precis(contrast)
+
+
+#   10) Are hierarchies for females more likely to be based on signals whereas those in males more likely to be based on aggression?
+
+# summary:
+data %>% group_by(sex,typeofbehaviour) %>% summarise(n())
+# For both sexes, we have very few matrices that only contain data from aggressive interactions (10 of the 156)
+# We therefore reclassify this into whether the dominance interactions involved any aggression at all (A + AD) or whether they are purely based on symbols (D)
+
+data$binarybehaviour<-ifelse(data$typeofbehaviour=="D","D","A")
+
+mdata_sex_behaviour <- list(
+  behaviour=as.numeric(as.factor(data$binarybehaviour))-1,
+  sex=as.numeric(as.factor(data$sex))
+)
+
+m_sex_behaviour <- ulam(
+  alist(
+    behaviour ~ dbinom(1,p),
+    logit(p) <-a[sex],
+    a[sex]~dnorm(0,1)
+  ) , data=mdata_sex_behaviour , chains=4 , cores=4 , cmdstan=T, messages=FALSE, refresh=0)
+
+posterior_sex_behaviour<-extract.samples(m_sex_behaviour)
+mean_prop_females<-inv_logit(posterior_sex_behaviour$a[,1])
+mean_prop_males<-inv_logit(posterior_sex_behaviour$a[,2])
+contrast_sex_behaviour<-inv_logit(posterior_sex_behaviour$a[,2])-inv_logit(posterior_sex_behaviour$a[,1])
+precis(contrast_sex_behaviour)
+results_sex_behaviour<-list(prop_onlydisplay_females=mean_prop_females,prop_onlydisplay_males=mean_prop_males,difference_prob_onlydisplay=contrast_sex_behaviour)
+
+precis(results_sex_behaviour)
