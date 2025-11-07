@@ -190,7 +190,7 @@ dat_list_h_index_captivity <- list(
 )
 # We need to provide priors, our expectation of what these values might be. For the means, we could expect that they are somewhere around 0.5
 # For the variance, we expect this to be larger than than zero (so we use the dexp function) and larger than one
-# For the relationship with numberofineractions, we don't expect any effect a priori
+# For the relationship with captivity, we don't expect any effect a priori
 m_h_index_captivity <- ulam(
   alist(
     h_index ~ dbeta2(mean,variance),
@@ -947,3 +947,108 @@ precis(contrast_sex_behaviour)
 results_sex_behaviour<-list(prop_onlydisplay_females=mean_prop_females,prop_onlydisplay_males=mean_prop_males,difference_prob_onlydisplay=contrast_sex_behaviour)
 
 precis(results_sex_behaviour)
+
+
+
+
+### Estimation of whether the phylogenetic component is captured by the number of interactions
+library(brms)
+library(ape)
+A<-vcv.phylo(mtree)
+
+model_phy<-brm(
+  steepness ~ 1 + (1|gr(species,cov=A)),
+  data=data[data$sex=="females",],
+  data2=list(A=A),
+  family=Beta()
+)
+summary(model_phy)
+
+model_phy_interactions<-brm(
+  steepness ~ l_interactions+ (1|gr(species,cov=A)),
+  data=data[data$sex=="females",],
+  data2=list(A=A),
+  family=Beta()
+)
+summary(model_phy_interactions)
+
+# The estimate for the intercept of the phylogenetic covariance declines, but is still largely present when accounting for the number of interactions
+
+
+### Estimation of the amount of within compared to between species variance in steepness
+dat_list_variation<-list(
+  steepness=data[data$sex=="females",]$steepness,
+  species=as.numeric(as.factor(data[data$sex=="females",]$species))
+)
+
+model <- ulam(
+  alist(
+    steepness ~ dbeta(mu, phi),
+    logit(mu) <- a_group[species],
+    a_group[species] ~ dnorm(a, sigma_group),
+    a ~ dnorm(0, 1),
+    sigma_group ~ dcauchy(0, 1),
+    phi ~ dexp(1)
+  ),
+  data = dat_list_variation,
+  chains = 4,
+  cores = 4
+)
+
+
+# Extract posterior samples
+post <- extract.samples(model)
+
+post$mu<-inv_logit(post$a)
+post$within<-post$mu*(1-post$mu)/post$phi
+post$between<-post$sigma_group*post$sigma_group
+
+# Compare variances
+var_ratio <- post$between / post$within
+precis(list(ratio=var_ratio))
+
+
+dat_list_variation<-list(
+  steepness=data[data$sex=="males",]$steepness,
+  species=as.numeric(as.factor(data[data$sex=="males",]$species))
+)
+
+model <- ulam(
+  alist(
+    steepness ~ dbeta(mu, phi),
+    logit(mu) <- a_group[species],
+    a_group[species] ~ dnorm(a, sigma_group),
+    a ~ dnorm(0, 1),
+    sigma_group ~ dcauchy(0, 1),
+    phi ~ dexp(1)
+  ),
+  data = dat_list_variation,
+  chains = 4,
+  cores = 4
+)
+
+
+# Extract posterior samples
+post <- extract.samples(model)
+
+post$mu<-inv_logit(post$a)
+post$within<-post$mu*(1-post$mu)/post$phi
+post$between<-post$sigma_group*post$sigma_group
+
+# Compare variances
+var_ratio <- post$between / post$within
+precis(list(ratio=var_ratio))
+
+op<-par()
+plot.new()
+par(mar = c(14.1, 4.1, 4.1, 4.1), # change the margins
+    lwd = 2, # increase the line thickness
+    cex.axis = 1.2 # increase default axis label size
+)
+
+plot(data[data$sex=="females",]$steepness~factor(data[data$sex=="females",]$species,levels=mtree$tip.label),las=2,xlab="",ylab="")
+mtext("Hierarchy steepness in females",side=3,cex=2)
+
+plot.new()
+plot(data[data$sex=="males",]$steepness~factor(data[data$sex=="males",]$species,levels=mtree$tip.label),las=2,xlab="",ylab="")
+mtext("Hierarchy steepness in males",side=3,cex=2)
