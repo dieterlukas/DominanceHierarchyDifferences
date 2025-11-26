@@ -7,24 +7,26 @@
 #   1) Are hierarchy steepness and linearity sensitive to sparseness and nb of interactions? 
 #   
 #   2) Are hierarchy steepness and linearity sensitive to the nb of individuals included in the hierarchy?
+#
+#   3) Are hierarchy steepness and linearity different in captivity than in the wild?
 
 # B) Are there dominance types?  
-#   3) Are hierarchy steepness and linearity correlated across species (w. or without accounting for phylogenetic relatedness)?
-#   4) Are hierarchies steeper and more linear when they are based on signals rather than aggression?
+#   4) Are hierarchy steepness and linearity correlated across species (w. or without accounting for phylogenetic relatedness)?
+#
+#   5) Are hierarchies steeper and more linear when they are based on signals rather than aggression?
 
 # C) Are there sex-differences in the characteristics of hierarchies?
-#   5) Is hierarchy steepness in males different from that in females (w. or without accounting for phylogenetic relatedness)?
+#   6) Is hierarchy steepness in males different from that in females (w. or without accounting for phylogenetic relatedness)?
 #   
-#   6) If steepness differs in males and females, can it be linked to the fact that female hierarchies often include more individuals?
+#   7) If steepness differs in males and females, can it be linked to the fact that female hierarchies often include more individuals?
 #   
-#   7) Is hierarchy linearity in males different from that in females (w. or without accounting for phylogenetic relatedness)?
+#   8) Is hierarchy linearity in males different from that in females (w. or without accounting for phylogenetic relatedness)?
 #   
-#   8) Is hierarchy linearity linked to hierarchy steepness in the same way in males and in females?
+#   9) Is hierarchy linearity linked to hierarchy steepness in the same way in males and in females?
 #   
-#   9) Are hierarchies steeper for the sex that wins more fights - that is, is the proportion of intersexual fights that females win negatively related to the hierarchy steepness in males, and positively to the hierarchy steepness in females?
+#   10) Are hierarchies steeper for the sex that wins more fights - that is, is the proportion of intersexual fights that females win negatively related to the hierarchy steepness in males, and positively to the hierarchy steepness in females?
 #   
-#   10) Are hierarchies for females more likely to be based on signals whereas those in males more likely to be based on aggression?
-
+#   11) Are hierarchies for females more likely to be based on signals whereas those in males more likely to be based on aggression?
 
 # We first load the required packages
 library(rethinking)
@@ -37,6 +39,16 @@ library(phytools)
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 data <- read.csv("Comparative_primate_steepness_values.csv")
 
+# Integrate the additional variable, on the intersexual dominance relationship, to the dataset (the averaged percentage of fights won by females).
+dominancedata<-read.csv(url("https://github.com/dieterlukas/primate_power/raw/refs/heads/main/data/PopulationData_IntersexDominance.csv"))
+intersex_dominance<-as.data.frame(dominancedata %>% group_by(species=corrected_species_id) %>% summarise(perc_won_females=mean(perc_won_females,na.rm=T)))
+data<-left_join(data,intersex_dominance,by="species")
+# Recover the averaged percentage of fights won by females in dominancedata for Sapajus_apella and and assign it in data for the species Cebus_apella
+dominancedata %>%
+  filter(corrected_species_id == "Sapajus_apella") %>%
+  summarise(mean_perc = mean(perc_won_females, na.rm = TRUE))
+data$perc_won_females[data$species == "Cebus_apella"] <- 33
+# Some species that we have in data do not appear in dominancedata, which produces NA entries. I will delete these lines in section 10). 
 
 # Load the phylogeny and prepare it
 
@@ -116,7 +128,7 @@ precis(m_steepness_sparseness_duration)
 
 
 
-# 2a) steepness sensitive to number of interactions
+# 1b) steepness sensitive to number of interactions
 dat_list_steepness_numberofineractions <- list(
   steepness = as.numeric(data$steepness),  
   numberofineractions = log(data$numberofineractions)
@@ -138,7 +150,7 @@ plot(data$steepness~log(data$numberofineractions))
 # Here, the relationship is linear, so we might want to include this as a linear predictor
 
 
-# 1b) linearity sensitive to sparseness
+# 1c) linearity sensitive to sparseness
 dat_list_h_index_sparseness <- list(
   h_index = as.numeric(data$h_index)-0.0001,  
   sparseness = standardize(data$sparseness)
@@ -160,7 +172,7 @@ plot(data$h_index~data$sparseness)
 # Here, the relationship is linear, so we want to include this as a linear predictor
 
 
-# 2b) linearity sensitive to number of interactions
+# 1d) linearity sensitive to number of interactions
 dat_list_h_index_numberofineractions <- list(
   h_index = as.numeric(data$h_index)-0.0001,  
   numberofineractions = log(data$numberofineractions)
@@ -181,8 +193,78 @@ precis(m_h_index_numberofineractions)
 plot(data$h_index~log(data$numberofineractions))
 # Here is no effect, so we do not need to account for it
 
+# 2a) steepness sensitive to the nb of individuals
+dat_list_steepness_numberofindividuals <- list(
+  steepness = as.numeric(data$steepness),
+  numberofindividuals = standardize(data$numberofindividuals)
+)
 
-# 2c) linearity different in captivity than in the wild
+# We need to provide priors, our expectation of what these values might be. For the means, we could expect that they are somewhere around 0.5
+# For the variance, we expect this to be larger than than zero (so we use the dexp function) and larger than one
+# For the relationship with numberofindividuals, we don't expect any effect a priori
+m_steepness_numberofindividuals <- ulam(
+  alist(
+    steepness ~ dbeta2(mean,variance),
+    logit(mean) <-a + b*numberofindividuals,
+    a ~dnorm(0.5,1),   
+    b ~dnorm(0,1),
+    variance ~ dexp(10)
+  ) , data=dat_list_steepness_numberofindividuals , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+# We check the results - we are interested in the effect measured in the factor b
+precis(m_steepness_numberofindividuals)
+plot(data$steepness~standardize(data$numberofindividuals))
+# Here, the relationship is linear, so we might want to include this as a linear predictor
+
+
+# 2b) linearity sensitive to the nb of individuals
+dat_list_h_index_numberofindividuals <- list(
+  h_index = as.numeric(data$h_index)-0.0001,
+  numberofindividuals = standardize(data$numberofindividuals)
+)
+
+# We need to provide priors, our expectation of what these values might be. For the means, we could expect that they are somewhere around 0.5
+# For the variance, we expect this to be larger than than zero (so we use the dexp function) and larger than one
+# For the relationship with numberofindividuals, we don't expect any effect a priori
+m_h_index_numberofindividuals <- ulam(
+  alist(
+    h_index ~ dbeta2(mean,variance),
+    logit(mean) <-a + b*numberofindividuals,
+    a ~dnorm(0.5,1),   
+    b ~dnorm(0,1),
+    variance ~ dexp(10)
+  ) , data=dat_list_h_index_numberofindividuals , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+# We check the results - we are interested in the effect measured in the factor b
+precis(m_h_index_numberofindividuals)
+plot(data$h_index~standardize(data$numberofindividuals))
+# Here is no effect, so we do not need to account for it
+
+
+# 3a) steepness different in captivity than in the wild
+dat_list_steepness_captivity <- list(
+  steepness = as.numeric(data$steepness),
+  captive = as.numeric(as.factor(data$group)),
+  numberofindividuals= standardize(data$numberofindividuals)
+)
+
+# We need to provide priors, our expectation of what these values might be. For the means, we could expect that they are somewhere around 0.5
+# For the variance, we expect this to be larger than than zero (so we use the dexp function) and larger than one
+# For the relationship with captivity, we don't expect any effect a priori
+m_steepness_captivity <- ulam(
+  alist(
+    steepness ~ dbeta2(mean,variance),
+    logit(mean) <-a + b[captive]+c*numberofindividuals,
+    a ~dnorm(0.5,1),   
+    b[captive] ~dnorm(0,1),
+    c ~dnorm(0,1),
+    variance ~ dexp(10)
+  ) , data=dat_list_steepness_captivity , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+# We check the results - we are interested in the effect measured in the factor b
+posterior_captivity<-extract.samples(m_steepness_captivity)
+contrast_captivity<-inv_logit(posterior_captivity$b[,2])-inv_logit(posterior_captivity$b[,1])
+precis(contrast_captivity)
+
+
+# 3b) linearity different in captivity than in the wild
 dat_list_h_index_captivity <- list(
   h_index = as.numeric(data$h_index)-0.0001,  
   captive = as.numeric(as.factor(data$group)),
@@ -211,7 +293,7 @@ precis(contrast_captivity)
 
 ### Analyses for section B - dominance types
 
-#   3) Are hierarchy steepness and linearity correlated across species  / accounting for phylogenetic relatedness and sparseness (which affects both)
+#   4) Are hierarchy steepness and linearity correlated across species  / accounting for phylogenetic relatedness and sparseness (which affects both)
 
 mdata_phylogeny_steepness_linearity <- list(
   steepness=data$steepness,
@@ -244,9 +326,10 @@ precis(m_steepness_steepness_linearity)
 plot(data$steepness~data$h_index)
 # Linearity and steepness are positively correlated
 
-#   4) Are hierarchies steeper and more linear when they are based on signals rather than aggression?
-data[data$typeofbehaviour=="unc",]$typeofbehaviour<-"AD"
-data[data$typeofbehaviour=="flee",]$typeofbehaviour<-"A"
+#   5) Are hierarchies steeper and more linear when they are based on signals rather than aggression?
+data$typeofbehaviour[is.na(data$typeofbehaviour)] <- "AD"
+#if we don't want to include NA : data <- data[!is.na(data$typeofbehaviour), ]
+
 boxplot(data$steepness~data$typeofbehaviour)
 boxplot(data$h_index~data$typeofbehaviour)
 
@@ -297,7 +380,7 @@ precis(contrast_D_A)
 
 
 ### Analyses for section C - sex-differences 
-#   5) Is hierarchy steepness in males different from that in females (w. or without accounting for phylogenetic relatedness)?
+#   6) Is hierarchy steepness in males different from that in females (w. or without accounting for phylogenetic relatedness)?
 
 # descriptive statistics
 length(unique(data$species)) # 38
@@ -506,7 +589,7 @@ contrast_steepness<-as.data.frame(inv_logit(samples_m_steepness_both$a_males)-in
 precis(contrast_steepness)
 
 
-# 6) If steepness differs in males and females, can it be linked to the fact that female hierarchies often include more individuals?
+# 7) If steepness differs in males and females, can it be linked to the fact that female hierarchies often include more individuals?
 
 # Contrary to our prediction, the more individuals there are in a group, the steeper the hierarchy
 # We though also found that the steepness values of females are on average slightly larger than those of the males, so the number of individuals and the resulting number of interactions might explain the differences in steepness
@@ -591,7 +674,7 @@ precis(results_steepness)
 
 
 
-### 7) Is hierarchy linearity in males different from that in females (w. or without accounting for phylogenetic relatedness)?
+### 8) Is hierarchy linearity in males different from that in females (w. or without accounting for phylogenetic relatedness)?
 data$h_index<-data$h_index-0.001
 
 mean_males <- mean(as.numeric(data$h_index[data$sex == "males"]), na.rm = TRUE)
@@ -843,7 +926,7 @@ precis(results_h_index)
 
 
 
-#   8) Is hierarchy linearity linked to hierarchy steepness in the same way in males and in females?
+#   9) Is hierarchy linearity linked to hierarchy steepness in the same way in males and in females?
 
 
 
@@ -882,7 +965,7 @@ points(data[data$sex=="males",]$steepness~data[data$sex=="males",]$h_index,col="
 
 
 #   
-#   9) Are hierarchies steeper for the sex that wins more fights - that is, is the proportion of intersexual fights that females win negatively related to the hierarchy steepness in males, and positively to the hierarchy steepness in females?
+#   10) Are hierarchies steeper for the sex that wins more fights - that is, is the proportion of intersexual fights that females win negatively related to the hierarchy steepness in males, and positively to the hierarchy steepness in females?
 
 
 
@@ -918,7 +1001,7 @@ contrast<-inv_logit(posterior_sex_steepness_dominance$cf-posterior_sex_steepness
 precis(contrast)
 
 
-#   10) Are hierarchies for females more likely to be based on signals whereas those in males more likely to be based on aggression?
+#   11) Are hierarchies for females more likely to be based on signals whereas those in males more likely to be based on aggression?
 
 # summary:
 data %>% group_by(sex,typeofbehaviour) %>% summarise(n())
