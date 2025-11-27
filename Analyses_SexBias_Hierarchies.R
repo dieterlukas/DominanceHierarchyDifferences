@@ -967,38 +967,39 @@ points(data[data$sex=="males",]$steepness~data[data$sex=="males",]$h_index,col="
 #   
 #   10) Are hierarchies steeper for the sex that wins more fights - that is, is the proportion of intersexual fights that females win negatively related to the hierarchy steepness in males, and positively to the hierarchy steepness in females?
 
-
+data_dominance<-data[is.na(data$perc_won_females)==F,]
+data_dominance$perc_won_females<-log(data_dominance$perc_won_females+0.01)
 
 mdata_sex_steepness_dominance <- list(
-  femalesteepness=as.numeric(data[data$sex=="females",]$steepness),
-  malesteepness=as.numeric(data[data$sex=="males",]$steepness),
-  dominance_femalevalues=standardize(data[data$sex=="females",]$prop_win_females),
-  dominance_malevalues=standardize(data[data$sex=="males",]$prop_win_females),
-  femalesparseness=standardize(data[data$sex=="females",]$sparseness),
-  malesparseness=standardize(data[data$sex=="males",]$sparseness)
+  femalesteepness=as.numeric(data_dominance[data_dominance$sex=="females",]$steepness),
+  malesteepness=as.numeric(data_dominance[data_dominance$sex=="males",]$steepness),
+  dominance_femalevalues=standardize(data_dominance[data_dominance$sex=="females",]$perc_won_females),
+  dominance_malevalues=standardize(data_dominance[data_dominance$sex=="males",]$perc_won_females),
+  femalesparseness=standardize(data_dominance[data_dominance$sex=="females",]$sparseness),
+  malesparseness=standardize(data_dominance[data_dominance$sex=="males",]$sparseness)
 )
 
 m_sex_steepness_dominance <- ulam(
   alist(
     femalesteepness ~ dbeta2(femalemean,femalevariance),
-    logit(femalemean) <-af+b*femalesparseness+cf*dominance_femalevalues,
+    logit(femalemean) <-a+b*femalesparseness+cf*dominance_femalevalues,
     malesteepness ~ dbeta2(malemean,malevariance),
-    logit(malemean) <-am+b*malesparseness+cm*dominance_malevalues,
-    c(af,am)~dnorm(0,1),
+    logit(malemean) <-a+b*malesparseness+(cf+maleoffset)*dominance_malevalues,
+    a~dnorm(0,1),
     b~dnorm(0,1),
     cf~dnorm(0,1),
-    cm~dnorm(0,1),
     maleoffset~dnorm(0,1),
     femalevariance~dexp(10),
     malevariance~dexp(10)
   ) , data=mdata_sex_steepness_dominance , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
 
-# Check whether cf is positive and cm is negative
+# Check whether the male-offset is different from zero - if it is positive, that means that male hierarchies are steeper than female hierarchies when females are dominant; if it is negative, than male hierarchies are less steep than female hierarchies when females are dominant:
 precis(m_sex_steepness_dominance)
-# Determine whether the values are different from each other
-posterior_sex_steepness_dominance<-extract.samples(m_sex_steepness_dominance)
-contrast<-inv_logit(posterior_sex_steepness_dominance$cf-posterior_sex_steepness_dominance$cm)
-precis(contrast)
+# We can also check the cf value - if it is positive, that means that hierarchies of females are steeper when females win more fights and if the maleoffset is zero, it also means that male hierarchies are steeper when females win more fights; if it is negative, hierarchies are steeper when males are dominant.
+
+# We can plot this - female values are black, male values are red
+plot(data_dominance$steepness~data_dominance$perc_won_females,col=as.factor(data_dominance$sex))
+# It looks like there is a confound here - we do not have hierarchy data for males from species where males always wins the fights. This is because the species where males always win fights, there is usually only a single male per group - that means we cannot calculate the hierarchy among the males (in our data, those species are gorillas, hamadryas baboons, and red howler monkeys, which are all polygynous). 
 
 
 #   11) Are hierarchies for females more likely to be based on signals whereas those in males more likely to be based on aggression?
