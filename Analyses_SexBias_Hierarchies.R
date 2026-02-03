@@ -34,6 +34,13 @@ library(dplyr)
 library(ape)
 library(geiger)
 library(phytools)
+library(ggplot2)
+library(gridExtra)
+library(grid)
+library(ggtree)
+library(stringr)
+library(tidyverse)
+library(tidytree)
 
 # Load the data
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
@@ -287,6 +294,28 @@ posterior_captivity<-extract.samples(m_h_index_captivity)
 contrast_captivity<-inv_logit(posterior_captivity$b[,2])-inv_logit(posterior_captivity$b[,1])
 precis(contrast_captivity)
 
+#TREE
+p <- ggtree(phylo_primate) + theme_tree2()
+
+data_N <- data %>%
+  group_by(species) %>%
+  summarise(Nmatrices = n(), .groups = "drop") %>%  # n() = nombre de lignes par espèce
+  mutate(
+    species_label = str_replace_all(species, "_", " "),
+    species_label = str_to_sentence(species_label)
+  )
+p2 <- p %<+% data_N
+
+p2 +
+  geom_tiplab(aes(label = species_label), size = 3, offset = 4, align = TRUE) +
+  geom_tippoint(aes(size = Nmatrices), shape = 21, fill = "steelblue", alpha = 0.7) +
+  scale_size_area(
+    max_size = 6,
+    name = "N matrices",
+    breaks = round(seq(min(data_N$Nmatrices), max(data_N$Nmatrices), length.out = 4))
+  ) +
+  coord_cartesian(xlim = c(0, 75), clip = "off")
+
 
 
 
@@ -325,6 +354,49 @@ m_steepness_steepness_linearity <- ulam(
 precis(m_steepness_steepness_linearity)
 plot(data$steepness~data$h_index)
 # Linearity and steepness are positively correlated
+
+# PLOT for B.4) 
+#rawdata
+plot_4_data <- data.frame(
+  steepness = mdata_phylogeny_steepness_linearity$steepness,
+  linearity = mdata_phylogeny_steepness_linearity$linearity,
+  species = factor(data$species)  # if we want to put some colours
+)
+#Why not add a color to the dots according to family? Like Hominoid, Cercopithecoidea, NW monkey, etc? 
+
+#posterior
+post <- extract.samples(m_steepness_steepness_linearity)
+
+#smooth curve
+linearity_seq <- seq(min(plot_4_data$linearity), max(plot_4_data$linearity), length.out = 100)
+
+#predictions
+preds <- sapply(1:length(post$a), function(i) {
+  plogis(post$a[i] + post$d[i] * linearity_seq)  # steepness sur logit scale
+})
+
+#mean and CI
+pred_df <- data.frame(
+  linearity = linearity_seq,
+  mean = rowMeans(preds),
+  lower = apply(preds, 1, quantile, 0.055),
+  upper = apply(preds, 1, quantile, 0.945)
+)
+
+#final plot 
+ggplot(plot_4_data, aes(x = linearity, y = steepness)) +
+  geom_point(size = 3, color = "steelblue") +
+  geom_ribbon(data = pred_df, aes(x = linearity, ymin = lower, ymax = upper),
+              fill = "red", alpha = 0.2, inherit.aes = FALSE) +
+  geom_line(data = pred_df, aes(x = linearity, y = mean),
+            color = "red", size = 1.2, inherit.aes = FALSE) +
+  labs(
+    x = "Hierarchy Linearity",
+    y = "Hierarchy Steepness") +
+  theme_bw(base_size = 14) +
+  theme(axis.title = element_text(face = "bold"))
+
+
 
 #   5) Are hierarchies steeper and more linear when they are based on signals rather than aggression?
 data$typeofbehaviour[is.na(data$typeofbehaviour)] <- "AD"
@@ -375,7 +447,143 @@ contrast_D_A<-post_linearity_typeofbehaviour$b[,3]-post_linearity_typeofbehaviou
 precis(contrast_D_A)
 # No difference
 
+#PLOTs for section B.5) 
+# We need that typeofbehaviour is a factor
+data$typeofbehaviour <- factor(data$typeofbehaviour, levels = c("A","D","AD"))
 
+ggplot(data, aes(x = typeofbehaviour, y = steepness, fill = typeofbehaviour)) +
+  geom_violin(alpha = 0.3, color = NA) +          # distribution générale
+  geom_boxplot(width = 0.2, outlier.shape = 21, outlier.fill = "white") + # médiane + quartiles
+  scale_fill_manual(values = c("A" = "#1F77B4", "D" = "#2E8B57", "AD" = "#FF7F0E")) +
+  labs(
+    x = "Type of Interaction",
+    y = "Hierarchy Steepness") +
+  theme_bw(base_size = 16) +
+  theme(
+    axis.text = element_text(size = 12),
+    legend.position = "none"
+  )
+
+
+
+#PLOTs for section B.5) 
+#we need that typeofbehaviour is a factor
+data$typeofbehaviour <- factor(data$typeofbehaviour, levels = c("A","D","AD"))
+
+ggplot(data, aes(x = typeofbehaviour, y = steepness, fill = typeofbehaviour)) +
+  geom_violin(alpha = 0.3, color = NA) +          # distribution générale
+  geom_boxplot(width = 0.2, outlier.shape = 21, outlier.fill = "white") + # médiane + quartiles
+  scale_fill_manual(values = c("A" = "#1F77B4", "D" = "#2E8B57", "AD" = "#FF7F0E")) +
+  labs(
+    x = "Type of Interaction",
+    y = "Hierarchy Steepness") +
+  theme_bw(base_size = 16) +
+  theme(
+    axis.text = element_text(size = 12),
+    legend.position = "none"
+  )
+
+
+#2nd plot
+p_steepness <- ggplot(data, aes(x = typeofbehaviour, y = steepness, fill = typeofbehaviour)) +
+  geom_violin(alpha = 0.3, color = NA) +
+  geom_boxplot(width = 0.2, outlier.shape = 21, outlier.fill = "white") +
+  scale_fill_manual(values = c("A" = "#1F77B4", "D" = "#2E8B57", "AD" = "#FF7F0E")) +
+  labs(x = "Type of Interaction", y = "Hierarchy Steepness") +
+  theme_bw(base_size = 16) +
+  theme(axis.text = element_text(size = 12),
+        legend.position = "none")
+
+#plot for linearity
+p_linearity <- ggplot(data, aes(x = typeofbehaviour, y = h_index, fill = typeofbehaviour)) +
+  geom_violin(alpha = 0.3, color = NA) +
+  geom_boxplot(width = 0.2, outlier.shape = 21, outlier.fill = "white") +
+  scale_fill_manual(values = c("A" = "#1F77B4", "D" = "#2E8B57", "AD" = "#FF7F0E")) +
+  labs(x = "Type of Interaction", y = "Hierarchy Linearity") +
+  theme_bw(base_size = 16) +
+  theme(axis.text = element_text(size = 12),
+        legend.position = "none")
+
+#merge both of them
+grid.arrange(p_steepness, p_linearity, ncol = 2)
+
+
+#3rd plot
+post_steepness <- post_steepness_typeofbehaviour
+post_linearity <- post_linearity_typeofbehaviour
+
+cred_steepness <- data.frame(
+  typeofbehaviour = factor(c("A","D","AD"), levels=c("A","D","AD")),
+  median = apply(post_steepness_typeofbehaviour$b, 2, median),
+  lower = apply(post_steepness_typeofbehaviour$b, 2, function(x) quantile(x, 0.025)),
+  upper = apply(post_steepness_typeofbehaviour$b, 2, function(x) quantile(x, 0.975))
+)
+
+cred_linearity <- data.frame(
+  typeofbehaviour = factor(c("A","D","AD"), levels=c("A","D","AD")),
+  median = apply(post_linearity_typeofbehaviour$b, 2, median),
+  lower = apply(post_linearity_typeofbehaviour$b, 2, function(x) quantile(x, 0.025)),
+  upper = apply(post_linearity_typeofbehaviour$b, 2, function(x) quantile(x, 0.975))
+)
+
+
+label_map <- c("A" = "Aggression", "D" = "Signal", "AD" = "Both")
+cols_type <- c("A"="#1F77B4", "D"="#2E8B57", "AD"="#FF7F0E")
+
+#steepness plot
+p_steepness <- ggplot() +
+  geom_errorbar(data = cred_steepness,
+                aes(x = typeofbehaviour, ymin = pmax(0, lower), ymax = pmin(1, upper), color = typeofbehaviour),
+                width = 0.1, size = 0.8, inherit.aes = FALSE) +
+  geom_point(data = cred_steepness,
+             aes(x = typeofbehaviour, y = median, color = typeofbehaviour),
+             size = 4, inherit.aes = FALSE) +
+  geom_jitter(data = data,
+              aes(x = typeofbehaviour, y = steepness, color = typeofbehaviour),
+              width = 0.15, size = 3, alpha = 0.6) +
+  scale_color_manual(values = cols_type) +
+  scale_x_discrete(labels = label_map) +  
+  labs(x="Type of Interaction", y="Hierarchy Steepness") +
+  ylim(0,1) +
+  theme_minimal(base_size = 16) +
+  theme(plot.title = element_text(face="bold", hjust=0.5),
+        axis.title = element_text(face="bold", size=16),
+        axis.text = element_text(size=14),
+        legend.position="none")
+
+#linearity plot
+p_linearity <- ggplot() +
+  geom_errorbar(data = cred_linearity,
+                aes(x = typeofbehaviour, ymin = pmax(0, lower), ymax = pmin(1, upper), color = typeofbehaviour),
+                width = 0.1, size = 0.8, inherit.aes = FALSE) +
+  geom_point(data = cred_linearity,
+             aes(x = typeofbehaviour, y = median, color = typeofbehaviour),
+             size = 4, inherit.aes = FALSE) +
+  geom_jitter(data = data,
+              aes(x = typeofbehaviour, y = h_index, color = typeofbehaviour),
+              width = 0.15, size = 3, alpha = 0.6) +
+  scale_color_manual(values = cols_type) +
+  scale_x_discrete(labels = label_map) +  
+  labs(x="Type of Interaction", y="Hierarchy Linearity") +
+  ylim(0,1) +
+  theme_minimal(base_size = 16) +
+  theme(plot.title = element_text(face="bold", hjust=0.5),
+        axis.title = element_text(face="bold", size=16),
+        axis.text = element_text(size=14),
+        legend.position="none")
+
+#merge them
+grid.arrange(p_steepness, p_linearity, ncol=2)
+
+p_steepness <- p_steepness + xlab(NULL)  
+p_linearity <- p_linearity + xlab("Type of Interaction")  
+grid.arrange(p_steepness, p_linearity, ncol=2)
+
+x.grob <- textGrob("Type of Interaction", gp=gpar(fontsize=16, fontface="bold"))
+
+grid.arrange(p_steepness + xlab(NULL), p_linearity + xlab(NULL),
+             ncol=2,
+             bottom = x.grob)  
 
 
 
@@ -409,6 +617,47 @@ points(rnorm(N_male_observations,mean=6,sd=0.1)~male_steepness,bg="#FDE725FF",pc
 legend(x = "topleft", c("Males", "Females"), pch = 19, col = c("#FDE725FF", "#443A83FF"), cex = 1)
 # Indeed, the difference between males and females is not striking.
 
+#plot 2
+cols_sex <- c("males"="#FDE725FF", "females"="#443A83FF")
+
+ggplot(data, aes(x = sex, y = steepness, color = sex, fill = sex)) +
+  geom_violin(alpha = 0.2, width = 0.3, color = NA) +
+  stat_summary(fun = median, geom = "point", size = 4, color = "black") +
+  geom_jitter(width = 0.15, size = 3, alpha = 0.6, shape = 21, stroke = 0.5) +
+  scale_color_manual(values = cols_sex) +
+  scale_fill_manual(values = cols_sex) +
+  labs(x = "Sex", y = "Hierarchy Steepness", title = "Steepness by Sex") +
+  ylim(0, 1) +
+  theme_minimal(base_size = 16) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title = element_text(face = "bold", size = 16),
+    axis.text = element_text(size = 14),
+    legend.position = "none"
+  )
+
+#3rd plot
+height_points <- c("males" = 4.5, "females" = 5.5)
+
+ggplot(data, aes(x = steepness, color = sex, fill = sex)) +
+  geom_density(size = 2, alpha = 0.3) +
+  geom_jitter(data = data,
+              aes(y = height_points[sex]),
+              width = 0, size = 3, alpha = 0.6, shape = 21, fill = "white") +
+  scale_color_manual(values = cols_sex) +
+  scale_fill_manual(values = cols_sex) +
+  labs(x = "Hierarchy Steepness", y = "Density") +
+  xlim(0,1) +
+  ylim(0,6) + 
+  theme_minimal(base_size = 16) +
+  theme(
+    plot.title = element_text(face="bold", hjust=0.5),
+    axis.title = element_text(face="bold", size=16),
+    axis.text = element_text(size=14),
+    legend.position="top"
+  )
+
+  
 
 # First model, straight comparison not accounting for potential dependencies among observations in the sample 
 dat_list_steepness <- list(
@@ -589,6 +838,34 @@ contrast_steepness<-as.data.frame(inv_logit(samples_m_steepness_both$a_males)-in
 precis(contrast_steepness)
 
 
+                                                                                       
+#PLOT posteriors
+#transform
+steepness_males_post <- inv_logit(samples$a_males)
+steepness_females_post <- inv_logit(samples$a_females)
+
+#long
+plot_data <- data.frame(
+  steepness = c(steepness_males_post, steepness_females_post),
+  sex = rep(c("Males", "Females"), each = length(steepness_males_post))
+)
+ 
+ggplot(plot_data, aes(x = steepness, fill = sex, color = sex)) +
+  geom_density(alpha = 0.3, size = 1.2) +
+  scale_fill_manual(values = c("Males" = "#FDE725FF", "Females" = "#443A83FF")) +
+  scale_color_manual(values = c("Males" = "#FDE725FF", "Females" = "#443A83FF")) +
+  xlim(0, 1) +
+  xlab("Hierarchy steepness") +
+  ylab("Posterior density") +
+  theme_bw(base_size = 16) +
+  theme(
+    legend.title = element_blank(),
+    axis.title = element_text(face = "bold"),
+    axis.text = element_text(face = "bold")
+  )
+
+
+                                                                                       
 ### Checking sex differences within species
 
 # We can calculate the differences in steepness between the sexes within species where we have data for both females and males
@@ -719,6 +996,79 @@ precis(results_steepness)
 # after accounting for the number of interactions, the values for males and females are very similar and the corrected estimated means are close to 0.5 because the number of interactions absorbed most of the variation in steepness
 
 
+                                                                                       
+### PLOT for C.7)
+individuals <- standardize(data$numberofindividuals)
+
+dat_list_steepness_individuals_n <- list(
+  steepness = c(female_steepness, male_steepness),
+  sex = c(rep(1, N_female_observations), rep(2, N_male_observations)),
+  individuals = c(individuals[data$sex=="females"], individuals[data$sex=="males"])
+)
+
+individuals_seq <- seq(
+  min(dat_list_steepness_individuals_n$individuals, na.rm = TRUE),
+  max(dat_list_steepness_individuals_n$individuals, na.rm = TRUE),
+  length.out = 100
+)
+
+
+#predicted steepness
+pred_females_ind <- inv_logit(mean(post_steepness_individuals$a[,1]) + mean(post_steepness_individuals$b) * individuals_seq)
+pred_males_ind   <- inv_logit(mean(post_steepness_individuals$a[,2]) + mean(post_steepness_individuals$b) * individuals_seq)
+
+
+#long
+plot_pred_ind <- data.frame(
+  individuals = rep(individuals_seq, 2),
+  steepness = c(pred_females_ind, pred_males_ind),
+  sex = rep(c("Females","Males"), each = length(individuals_seq))
+)
+
+#plot steepness ~ nombre d'individus
+C7p1 <- ggplot(plot_pred_ind, aes(x=individuals, y=steepness, color=sex)) +
+  geom_line(size=1.5) +
+  geom_point(data=data, 
+             aes(x=standardize(numberofindividuals), y=steepness, color=sex), 
+             alpha=0.3) +
+  scale_color_manual(values=c("Females"="#443A83FF","Males"="#FDE725FF")) +
+  xlab("Standardized number of individuals") +
+  ylab("Steepness") +
+  theme_minimal(base_size=16) +
+  theme(legend.position="top")
+
+
+
+individuals <- standardize(data$numberofindividuals)
+
+#mean
+individuals_mean <- mean(dat_list_steepness_individuals_n$individuals)
+
+#predicted steepness
+pred_females <- inv_logit(post_steepness_individuals$a[,1] + post_steepness_individuals$b * individuals_mean)
+pred_males   <- inv_logit(post_steepness_individuals$a[,2] + post_steepness_individuals$b * individuals_mean)
+
+#data frame for ggplot
+plot_post_model_ind <- data.frame(
+  steepness = c(pred_females, pred_males),
+  sex = rep(c("Females","Males"), each = length(pred_females))
+)
+
+#density plot
+C7p2<-ggplot(plot_post_model_ind, aes(x = steepness, color = sex, fill = sex)) +
+  geom_density(alpha = 0.3, size = 1) +
+  scale_color_manual(values = c("Females"="#443A83FF", "Males"="#FDE725FF")) +
+  scale_fill_manual(values = c("Females"="#443A83FF", "Males"="#FDE725FF")) +
+  xlab("Steepness (posterior predictive)") +
+  ylab("Density") +
+  theme_minimal(base_size = 16) +
+  theme(legend.position = "top")
+
+
+#merge them
+grid.arrange(C7p1, C7p2, ncol = 2)
+
+                                                                                       
 
 ### 8) Is hierarchy linearity in males different from that in females (w. or without accounting for phylogenetic relatedness)?
 data$h_index<-data$h_index-0.001
@@ -741,6 +1091,46 @@ points(rnorm(N_male_observations,mean=6,sd=0.1)~male_h_index,bg="#FDE725FF",pch=
 legend(x = "topleft", c("Males", "Females"), pch = 19, col = c("#FDE725FF", "#443A83FF"), cex = 1)
 # Indeed, the difference between males and females is not striking.
 
+#plot 2
+cols_sex <- c("males"="#FDE725FF", "females"="#443A83FF")
+
+ggplot(data, aes(x = sex, y = h_index, color = sex, fill = sex)) +
+  geom_violin(alpha = 0.2, width = 0.3, color = NA) +
+  stat_summary(fun = median, geom = "point", size = 4, color = "black") +
+  geom_jitter(width = 0.15, size = 3, alpha = 0.6, shape = 21, stroke = 0.5) +
+  scale_color_manual(values = cols_sex) +
+  scale_fill_manual(values = cols_sex) +
+  labs(x = "Sex", y = "Hierarchy Linearity") +
+  ylim(0, 1) +
+  theme_bw(base_size = 16) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title = element_text(face = "bold", size = 16),
+    axis.text = element_text(size = 14),
+    legend.position = "none"
+  )
+
+  #3rd plot
+height_points <- c("males" = 3.5, "females" = 4.5)
+
+ggplot(data, aes(x = h_index, color = sex, fill = sex)) +
+  geom_density(size = 2, alpha = 0.3) +
+  geom_jitter(data = data,
+              aes(y = height_points[sex]),
+              width = 0, size = 3, alpha = 0.6, shape = 21, fill = "white") +
+  scale_color_manual(values = cols_sex) +
+  scale_fill_manual(values = cols_sex) +
+  labs(x = "Hierarchy Linearity", y = "Density") +
+  xlim(0,1) +
+  ylim(0,5) +  # ajuster pour que tous les points soient visibles
+  theme_minimal(base_size = 16) +
+  theme(
+    plot.title = element_text(face="bold", hjust=0.5),
+    axis.title = element_text(face="bold", size=16),
+    axis.text = element_text(size=14),
+    legend.position="top"
+  )
+                                                                                       
 
 # First model, straight comparison not accounting for potential dependencies among observations in the sample 
 dat_list_h_index <- list(
@@ -970,6 +1360,57 @@ results_h_index<-list(mean_females=mean_females,mean_males=mean_males,difference
 # We can now display the results. The inference is that, if the 5.5% - 94.5% interval for the difference does not cross zero, the h_index values of the females and males are different
 precis(results_h_index)
 
+#PLOT for C.8)
+#posteriors
+post_h_index_species <- extract.samples(m_h_index_species)
+
+#mean
+mean_females <- inv_logit(post_h_index_species$a[,1])
+mean_males   <- inv_logit(post_h_index_species$a[,2])
+
+#df for ggplot
+plot_post_h_index <- data.frame(
+  h_index = c(mean_females, mean_males),
+  sex     = rep(c("Females","Males"), each = length(mean_females))
+)
+
+#density plot
+C8p1<-ggplot(plot_post_h_index, aes(x = h_index, fill = sex, color = sex)) +
+  geom_density(alpha = 0.3, size = 1.2) +
+  scale_color_manual(values = c("Females"="#443A83FF", "Males"="#FDE725FF")) +
+  scale_fill_manual(values = c("Females"="#443A83FF", "Males"="#FDE725FF")) +
+  xlab("h_index (posterior predictive)") +
+  ylab("Density") +
+  theme_minimal(base_size = 16) +
+  theme(legend.position = "top")
+
+
+#sparsenss
+sparseness_seq <- seq(min(dat_list_h_index_species$sparseness, na.rm=TRUE),
+                      max(dat_list_h_index_species$sparseness, na.rm=TRUE),
+                      length.out=100)
+
+#posteriors
+pred_females <- inv_logit(mean(post_h_index_species$a[,1]) + mean(post_h_index_species$c) * sparseness_seq)
+pred_males   <- inv_logit(mean(post_h_index_species$a[,2]) + mean(post_h_index_species$c) * sparseness_seq)
+
+plot_pred_sparseness <- data.frame(
+  sparseness = rep(sparseness_seq, 2),
+  h_index = c(pred_females, pred_males),
+  sex = rep(c("Females","Males"), each=length(sparseness_seq))
+)
+
+C8p2<-ggplot(plot_pred_sparseness, aes(x = sparseness, y = h_index, color = sex)) +
+  geom_line(size = 1.5) +
+  geom_point(data = data, aes(x = sparseness, y = h_index, color = sex), alpha = 0.3) +
+  scale_color_manual(values = c("Females"="#443A83FF","Males"="#FDE725FF")) +
+  xlab("Sparseness") +
+  ylab("h_index (predicted)") +
+  theme_minimal(base_size = 16) +
+  theme(legend.position="top")
+
+grid.arrange(C8p2, C8p1, ncol = 2)
+
 
 
 #   9) Is hierarchy linearity linked to hierarchy steepness in the same way in males and in females?
@@ -1006,11 +1447,86 @@ precis(m_sex_steepness_linearity)
 plot(data[data$sex=="females",]$steepness~data[data$sex=="females",]$h_index,col="purple")
 points(data[data$sex=="males",]$steepness~data[data$sex=="males",]$h_index,col="darkgreen",pch=16)
 # Linearity and steepness are positively correlated
+                                                                                       
+ggplot(data, aes(x = h_index, y = steepness, color = sex)) +
+  geom_point(size = 3, alpha = 0.6) +
+  scale_color_manual(values=c("females"="#443A83FF", "males"="#FDE725FF")) +
+  xlab("Linearity (h_index)") +
+  ylab("Steepness") +
+  theme_minimal(base_size = 16) +
+  theme(legend.position="top")
+
+
+#Combined plot
+#rawdata
+data_plot <- data.frame(
+  steepness = data$steepness,
+  h_index = data$h_index,
+  sex = data$sex
+)
+
+#predictions
+h_index_seq <- seq(min(data$h_index, na.rm=TRUE),
+                   max(data$h_index, na.rm=TRUE),
+                   length.out=100)
+post <- extract.samples(m_sex_steepness_linearity)
+
+#predicted steepness
+pred_females_mat <- sapply(h_index_seq, function(h) inv_logit(post$af + post$b*0 + post$cf*h))
+pred_males_mat   <- sapply(h_index_seq, function(h) inv_logit(post$am + post$b*0 + (post$cf + post$maleoffset)*h))
+
+#median and CI
+pred_females_df <- data.frame(
+  h_index = h_index_seq,
+  median = apply(pred_females_mat, 2, median),
+  lower  = apply(pred_females_mat, 2, quantile, probs=0.055),
+  upper  = apply(pred_females_mat, 2, quantile, probs=0.945),
+  sex = "Females"
+)
+
+pred_males_df <- data.frame(
+  h_index = h_index_seq,
+  median = apply(pred_males_mat, 2, median),
+  lower  = apply(pred_males_mat, 2, quantile, probs=0.055),
+  upper  = apply(pred_males_mat, 2, quantile, probs=0.945),
+  sex = "Males"
+)
+
+pred_plot <- rbind(pred_females_df, pred_males_df)
+
+#plot steepness ~ linearity
+C9_plot1 <- ggplot() +
+  geom_point(data=data, aes(x=h_index, y=steepness, color=sex), alpha=0.5, size=3) +
+  geom_ribbon(data=pred_plot, aes(x=h_index, ymin=lower, ymax=upper, fill=sex), alpha=0.2) +
+  geom_line(data=pred_plot, aes(x=h_index, y=median, color=sex), size=1.5) +
+  scale_color_manual(values=c("Females"="#443A83FF", "Males"="#FDE725FF")) +
+  scale_fill_manual(values=c("Females"="#443A83FF", "Males"="#FDE725FF")) +
+  xlab("Linearity (h_index)") +
+  ylab("Steepness") +
+  theme_minimal(base_size=16) +
+  theme(legend.position="top")
 
 
 
+# density plot
+slopes_df <- data.frame(
+  slope = c(post$cf, post$cf + post$maleoffset),
+  sex = rep(c("Females", "Males"), each = nrow(post))
+)
 
-#   
+C9_plot2 <- ggplot(slopes_df, aes(x=slope, fill=sex, color=sex)) +
+  geom_density(alpha=0.3, size=1) +
+  scale_color_manual(values=c("Females"="#443A83FF", "Males"="#FDE725FF")) +
+  scale_fill_manual(values=c("Females"="#443A83FF", "Males"="#FDE725FF")) +
+  xlab("Posterior slope (linearity effect on steepness)") +
+  ylab("Density") +
+  theme_minimal(base_size=16) +
+  theme(legend.position="top")
+
+grid.arrange(C9_plot1, C9_plot2, ncol=2)
+
+
+                           
 #   10) Are hierarchies steeper for the sex that wins more fights - that is, is the proportion of intersexual fights that females win negatively related to the hierarchy steepness in males, and positively to the hierarchy steepness in females?
 
 data_dominance<-data[is.na(data$perc_won_females)==F,]
@@ -1048,6 +1564,49 @@ plot(data_dominance$steepness~data_dominance$perc_won_females,col=as.factor(data
 # It looks like there is a confound here - we do not have hierarchy data for males from species where males always wins the fights. This is because the species where males always win fights, there is usually only a single male per group - that means we cannot calculate the hierarchy among the males (in our data, those species are gorillas, hamadryas baboons, and red howler monkeys, which are all polygynous). 
 
 
+#PLOT C.10)
+#predictions
+dominance_seq <- seq(
+  min(mdata_sex_steepness_dominance$dominance_femalevalues),
+  max(mdata_sex_steepness_dominance$dominance_femalevalues),
+  length.out = 100
+)
+
+#posteriors means
+post <- extract.samples(m_sex_steepness_dominance)
+
+pred_females <- inv_logit(mean(post$a) + mean(post$b)*0 + mean(post$cf)*dominance_seq)
+pred_males <- inv_logit(mean(post$a) + mean(post$b)*0 + (mean(post$cf) + mean(post$maleoffset))*dominance_seq)
+
+#df
+plot_pred <- data.frame(
+  dominance = rep(dominance_seq, 2),
+  steepness = c(pred_females, pred_males),
+  sex = rep(c("Females","Males"), each = length(dominance_seq))
+)
+
+#plot1 : steepness vs dominance femelle
+C10p1 <- ggplot(plot_pred, aes(x = dominance, y = steepness, color = sex)) +
+  geom_line(size = 1.5) +
+  geom_point(
+    data = data_dominance,
+    aes(
+      x = standardize(perc_won_females),
+      y = steepness,
+      color = sex
+    ),
+    alpha = 0.3
+  ) +
+  scale_color_manual(values=c("Females"="#443A83FF","Males"="#FDE725FF")) +
+  xlab("Dominance femelle (standardisée)") +
+  ylab("Steepness") +
+  theme_minimal(base_size = 16) +
+  theme(legend.position = "top")
+
+C10p1
+
+
+                           
 #   11) Are hierarchies for females more likely to be based on signals whereas those in males more likely to be based on aggression?
 
 # summary:
