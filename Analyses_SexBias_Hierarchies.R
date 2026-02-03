@@ -589,6 +589,52 @@ contrast_steepness<-as.data.frame(inv_logit(samples_m_steepness_both$a_males)-in
 precis(contrast_steepness)
 
 
+### Checking sex differences within species
+
+# We can calculate the differences in steepness between the sexes within species where we have data for both females and males
+steepness_withinsexcomparison<-as.data.frame(data %>% group_by(species,sex) %>% summarise(steepness=mean(steepness)))
+steepness_withinsexcomparison<-steepness_withinsexcomparison %>% spread(sex,steepness)
+steepness_withinsexcomparison$sexdifference<-steepness_withinsexcomparison$males-steepness_withinsexcomparison$females
+
+# positive values mean that males have steeper hierarchies in that species, negative values females
+hist(steepness_withinsexcomparison$sexdifference)
+mean(steepness_withinsexcomparison$sexdifference,na.rm=T) # -0.0009515069, so not different from zero
+
+# We can calculate all pairwise sex differences from across speciess to see whether the differences within species are different from what we would expect based on the values across species
+allsexcomparisons<-NA
+count<-1
+for (i in 1:nrow(steepness_withinsexcomparison)){
+  if(is.na(steepness_withinsexcomparison[i,]$females)){next(i)}else{
+    for (j in 1:nrow(steepness_withinsexcomparison)){
+      if(is.na(steepness_withinsexcomparison[j,]$males)){next(j)}else{
+        allsexcomparisons[count]<-steepness_withinsexcomparison[j,]$males-steepness_withinsexcomparison[i,]$females
+        count<-count+1
+      }
+    }
+  }
+}
+withinsexcomparisons<-steepness_withinsexcomparison$sexdifference
+withinsexcomparisons<-withinsexcomparisons[is.na(withinsexcomparisons)==F]
+
+dat_list_sexdifference<-list(
+  steepness_difference=c(allsexcomparisons,withinsexcomparisons),
+  within=c(rep(0,length(allsexcomparisons)),rep(1,length(withinsexcomparisons)))
+)
+
+m_sexdifference <- ulam(
+  alist(
+    steepness_difference ~ dnorm(mu,sigma),
+    mu <- a+b*within,
+    a ~dnorm(0,1),
+    b~dnorm(0,1),
+    sigma~dexp(1)
+  ) , data=dat_list_sexdifference , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+
+precis(m_sexdifference)
+# we are interested in the value of b - the value close to 0 (with 89% intervals spanning 0) means that the differences within species are indistinguishable from the sex differences between species, a negative value would have meant that within species sex differences are smaller than those between the sexes. 
+
+
+
 # 7) If steepness differs in males and females, can it be linked to the fact that female hierarchies often include more individuals?
 
 # Contrary to our prediction, the more individuals there are in a group, the steeper the hierarchy
