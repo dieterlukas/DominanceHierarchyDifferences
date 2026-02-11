@@ -297,7 +297,7 @@ contrast_captivity<-inv_logit(posterior_captivity$b[,2])-inv_logit(posterior_cap
 precis(contrast_captivity)
 
 #TREE
-p <- ggtree(phylo_primate) + theme_tree2()
+p <- ggtree(mtree) + theme_tree2()
 
 data_N <- data %>%
   group_by(species) %>%
