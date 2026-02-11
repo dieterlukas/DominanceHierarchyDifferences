@@ -112,6 +112,8 @@ plot(data$steepness~data$sparseness)
 
 # Study duration influences sparseness, but has not separate influence on the measurements
 # We need to remove missing values
+data[data$studyperiod_month=="unc",]$studyperiod_month<-NA
+data$studyperiod_month<-as.numeric(data$studyperiod_month)
 durationdata<-data[is.na(data$studyperiod_month)==F,]
 dat_list_steepness_sparseness_duration <- list(
   steepness = as.numeric(durationdata$steepness),  
@@ -841,8 +843,8 @@ precis(contrast_steepness)
                                                                                        
 #PLOT posteriors
 #transform
-steepness_males_post <- inv_logit(samples$a_males)
-steepness_females_post <- inv_logit(samples$a_females)
+steepness_males_post <- inv_logit(samples_m_steepness_both$a_males)
+steepness_females_post <- inv_logit(samples_m_steepness_both$a_females)
 
 #long
 plot_data <- data.frame(
@@ -960,7 +962,7 @@ precis(results_steepness)
 # though it appears that the main influence is not the number of individuals per se, but the number of interactions (usually, when there are more individuals, there are more chances for interactions)
 interactions<-log(data$numberofineractions)
 
-dat_list_steepness_individuals <- list(
+dat_list_steepness_interactions <- list(
   steepness = as.numeric(c(female_steepness, male_steepness)),  
   sex = c(rep(1, N_female_observations), rep(2, N_male_observations)),
   interactions = c(interactions[data$sex=="females"],interactions[data$sex=="males"]))
@@ -968,28 +970,28 @@ dat_list_steepness_individuals <- list(
 # We assume that there is not one single mean, but two, one for each of the sexes, and determine whether these means are estimated to be different
 # We need to provide priors, our expectation of what these values might be. For the means, we could expect that they are somewhere around 0.5
 # For the variance, we expect this to be larger than than zero (so we use the dexp function) and larger than one
-m_steepness_individuals <- ulam(
+m_steepness_interactions <- ulam(
   alist(
     steepness ~ dbeta2(mean,variance),
     logit(mean) <-a[sex]+b*interactions,
     a[sex] ~dnorm(0.5,1), 
     b ~ dnorm(0,1),
     variance ~ dexp(10)
-  ) , data=dat_list_steepness_individuals , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+  ) , data=dat_list_steepness_interactions , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
 # We extract samples from the Bayesian model
 
-precis(m_steepness_individuals)
+precis(m_steepness_interactions)
 #  the number of interactions has a very strong positive influence on the steepness
 
-post_steepness_individuals <- extract.samples(m_steepness_individuals)
+post_steepness_interactions <- extract.samples(m_steepness_interactions)
 
 # [The model used a logit function to force the mean to be larger than zero. We now reconvert this to the actual steepness scale]
-mean_females <- inv_logit(post_steepness_individuals$a[,1])
-mean_males <- inv_logit(post_steepness_individuals$a[,2])
+mean_females <- inv_logit(post_steepness_interactions$a[,1])
+mean_males <- inv_logit(post_steepness_interactions$a[,2])
 # The means we obtain here are slightly smaller than the means in the raw data (females 0.80, males 0.77) because the model takes into account that our data is not normally distributed but skewed and that values cannot be larger than 1 - but the difference between the values for the females and the males is the same (0.03)
 
 # We calculate whether the estimated means are different or whether the distributions overlap
-difference_steepness_individuals <- inv_logit(post_steepness_individuals$a[,2]) - inv_logit(post_steepness_individuals$a[,1])
+difference_steepness_individuals <- inv_logit(post_steepness_interactions$a[,2]) - inv_logit(post_steepness_interactions$a[,1])
 results_steepness<-list(mean_females=mean_females,mean_males=mean_males,difference_steepness=difference_steepness_individuals)
 
 precis(results_steepness)
