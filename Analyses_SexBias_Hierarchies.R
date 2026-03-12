@@ -320,12 +320,25 @@ p2 +
               fontface = "italic") +
   
   geom_cladelabel(node = 70, label = "Platyrrhini",
-                  align = TRUE, offset = 18, fontsize = 4, barsize = 1) +
-  geom_cladelabel(node = 41, label = "Cercopithecoidea",
-                  align = TRUE, offset = 18, fontsize = 4, barsize = 1) +
-  geom_cladelabel(node = 67, label = "Hominoidea",
-                  align = TRUE, offset = 18, fontsize = 4, barsize = 1) +
+                  align = TRUE,
+                  offset = 25,
+                  offset.text = 3,
+                  fontsize = 4,
+                  barsize = 1) +
   
+  geom_cladelabel(node = 41, label = "Cercopithecoidea",
+                  align = TRUE,
+                  offset = 25,
+                  offset.text = 3,
+                  fontsize = 4,
+                  barsize = 1) +
+  
+  geom_cladelabel(node = 67, label = "Hominoidea",
+                  align = TRUE,
+                  offset = 25,
+                  offset.text = 3,
+                  fontsize = 4,
+                  barsize = 1) +
   scale_size_area(
     max_size = 6,
     name = "N matrices",
