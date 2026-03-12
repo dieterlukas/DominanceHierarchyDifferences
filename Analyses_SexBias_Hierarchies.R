@@ -309,14 +309,32 @@ data_N <- data %>%
 p2 <- p %<+% data_N
 
 p2 +
-  geom_tiplab(aes(label = species_label), size = 3, offset = 4, align = TRUE) +
+  geom_hilight(node = 70, fill = "#8da0cb", alpha = 0.2) +
+  geom_hilight(node = 41, fill = "#66c2a5", alpha = 0.2) +
+  geom_hilight(node = 67, fill = "#fc8d62", alpha = 0.2) +
+  
   geom_tippoint(aes(size = Nmatrices), shape = 21, fill = "steelblue", alpha = 0.7) +
+  
+  geom_tiplab(aes(label = species_label),
+              size = 3.5, offset = 4, align = TRUE,
+              fontface = "italic") +
+  
+  geom_cladelabel(node = 70, label = "Platyrrhini",
+                  align = TRUE, offset = 18, fontsize = 4, barsize = 1) +
+  geom_cladelabel(node = 41, label = "Cercopithecoidea",
+                  align = TRUE, offset = 18, fontsize = 4, barsize = 1) +
+  geom_cladelabel(node = 67, label = "Hominoidea",
+                  align = TRUE, offset = 18, fontsize = 4, barsize = 1) +
+  
   scale_size_area(
     max_size = 6,
     name = "N matrices",
-    breaks = round(seq(min(data_N$Nmatrices), max(data_N$Nmatrices), length.out = 4))
+    breaks = round(seq(min(data_N$Nmatrices),
+                       max(data_N$Nmatrices),
+                       length.out = 4))
   ) +
-  coord_cartesian(xlim = c(0, 75), clip = "off")
+  
+  coord_cartesian(xlim = c(0, 95), clip = "off")
 
 
 
