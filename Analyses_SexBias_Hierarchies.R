@@ -246,6 +246,7 @@ m_h_index_numberofindividuals <- ulam(
 precis(m_h_index_numberofindividuals)
 plot(data$h_index~standardize(data$numberofindividuals))
 # Here is no effect, so we do not need to account for it
+### DIETER there is an effect here!!
 
 
 # 3a) steepness different in captivity than in the wild
