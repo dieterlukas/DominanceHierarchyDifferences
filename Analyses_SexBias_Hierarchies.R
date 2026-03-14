@@ -761,6 +761,7 @@ ggplot(data, aes(x = sex, y = steepness, color = sex, fill = sex)) +
     legend.position = "none"
   )
 
+
 #3rd plot
 height_points <- c("males" = 4.5, "females" = 5.5)
 
@@ -768,7 +769,7 @@ ggplot(data, aes(x = steepness, color = sex, fill = sex)) +
   geom_density(size = 2, alpha = 0.3) +
   geom_jitter(data = data,
               aes(y = height_points[sex]),
-              width = 0, size = 3, alpha = 0.6, shape = 21, fill = "white") +
+              width = 0, size = 3, alpha = 0.6, shape = 21, fill = "white", stroke = 1.5) +
   scale_color_manual(values = cols_sex) +
   scale_fill_manual(values = cols_sex) +
   labs(x = "Hierarchy Steepness", y = "Density") +
