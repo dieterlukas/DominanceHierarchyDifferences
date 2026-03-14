@@ -389,14 +389,10 @@ precis(m_steepness_steepness_linearity)
 plot(data$steepness~data$h_index)
 # Linearity and steepness are positively correlated
 
+###############################################################################################
 # PLOT for B.4) 
-#rawdata
-plot_4_data <- data.frame(
-  steepness = mdata_phylogeny_steepness_linearity$steepness,
-  linearity = mdata_phylogeny_steepness_linearity$linearity,
-  species = factor(data$species)  # if we want to put some colours
-)
-#Why not add a color to the dots according to family? Like Hominoid, Cercopithecoidea, NW monkey, etc? 
+
+##1st plot -  classic
 
 #posterior
 post <- extract.samples(m_steepness_steepness_linearity)
@@ -417,7 +413,16 @@ pred_df <- data.frame(
   upper = apply(preds, 1, quantile, 0.945)
 )
 
-#final plot 
+#rawdata
+plot_4_data <- data.frame(
+  steepness = mdata_phylogeny_steepness_linearity$steepness,
+  linearity = mdata_phylogeny_steepness_linearity$linearity,
+  species = factor(data$species)  # if we want to put some colours
+)
+
+
+
+### plot classic
 ggplot(plot_4_data, aes(x = linearity, y = steepness)) +
   geom_point(size = 3, color = "steelblue") +
   geom_ribbon(data = pred_df, aes(x = linearity, ymin = lower, ymax = upper),
@@ -430,6 +435,144 @@ ggplot(plot_4_data, aes(x = linearity, y = steepness)) +
   theme_bw(base_size = 14) +
   theme(axis.title = element_text(face = "bold"))
 
+
+### color = sex
+plot_4_data_sex <- data.frame(
+  steepness = mdata_phylogeny_steepness_linearity$steepness,
+  linearity = mdata_phylogeny_steepness_linearity$linearity,
+  species = factor(data$species),
+  sex = factor(data$sex)
+)
+
+ggplot(plot_4_data_sex, aes(x = linearity, y = steepness, color = sex)) +
+  
+  geom_ribbon(data = pred_df,
+              aes(x = linearity, ymin = lower, ymax = upper),
+              fill = "#fcbba1",
+              alpha = 0.3,
+              inherit.aes = FALSE) +
+  
+  geom_line(data = pred_df,
+            aes(x = linearity, y = mean),
+            color = "#d73027",
+            size = 1.2,
+            inherit.aes = FALSE) +
+  
+  geom_point(size = 3) +
+  
+  scale_color_manual(values = c(
+    females = "#443A83FF",
+    males = "#FDE725FF"
+  )) +
+  
+  labs(
+    x = "Hierarchy Linearity",
+    y = "Hierarchy Steepness",
+    color = NULL
+  ) +
+  
+  theme_bw(base_size = 14) +
+  
+  theme(
+    axis.title = element_text(face = "bold"),
+    legend.position = c(0.005, 0.05),
+    legend.justification = c(0, 0.3),
+    legend.background = element_rect(fill = alpha("white", 0.8), color = NA)
+  )
+
+
+### color = sex and shape = clade
+plot_4_data_sex$clade <- dplyr::case_when(
+  plot_4_data_sex$species %in% c("Cebus_capucinus", "Saimiri_sciureus", "Alouatta_palliata") ~ "Platyrrhini",
+  plot_4_data_sex$species %in% c("Pan_paniscus", "Pan_troglodytes", "Gorilla_gorilla", "Gorilla_beringei") ~ "Hominoidea",
+  TRUE ~ "Cercopithecoidea"
+)
+
+ggplot(plot_4_data_sex, aes(x = linearity, y = steepness)) +
+  geom_ribbon(
+    data = pred_df,
+    aes(x = linearity, ymin = lower, ymax = upper),
+    fill  = "#fcbba1",
+    alpha = 0.20,
+    inherit.aes = FALSE
+  ) +
+  geom_line(
+    data = pred_df,
+    aes(x = linearity, y = mean),
+    color = "#d73027",
+    size  = 1.2,
+    inherit.aes = FALSE
+  ) +
+  geom_point(
+    aes(color = sex, shape = clade),
+    size = 3,
+    stroke = 0.4,
+    position = position_jitter(width = 0.01, height = 0)
+  ) +
+  scale_color_manual(values = c(
+    females = "#443A83FF",
+    males   = "#FDE725FF"
+  )) +
+  scale_shape_manual(values = c(
+    Platyrrhini      = 16,
+    Hominoidea       = 17,
+    Cercopithecoidea = 15
+  )) +
+  labs(
+    x = "Hierarchy Linearity",
+    y = "Hierarchy Steepness",
+    color = NULL,
+    shape = NULL
+  ) +
+  theme_bw(base_size = 14) +
+  theme(
+    panel.grid.major   = element_line(color = "grey85"),
+    panel.grid.minor   = element_blank(),
+    axis.title         = element_text(face = "bold"),
+    legend.background  = element_rect(fill = alpha("white", 0.9), color = NA),
+    legend.position    = c(0.01, 0.01),
+    legend.justification = c(0, 0),
+    legend.text        = element_text(size = 9),
+    legend.title       = element_text(size = 9),
+    legend.box          = "horizontal",
+    legend.box.spacing  = grid::unit(0.3, "cm"),,
+    
+  )
+
+### color = clades
+ggplot(plot_4_data_sex, aes(x = linearity, y = steepness, color = clade)) +
+  
+  geom_ribbon(data = pred_df,
+              aes(x = linearity, ymin = lower, ymax = upper),
+              fill = "#fcbba1", alpha = 0.20, inherit.aes = FALSE) +
+  
+  geom_line(data = pred_df,
+            aes(x = linearity, y = mean),
+            color = "#d73027", size = 1.2, inherit.aes = FALSE) +
+  
+  geom_point(size = 3, stroke = 0.4,
+             position = position_jitter(width = 0.01, height = 0)) +
+  
+  scale_color_manual(values = c(
+    Platyrrhini      = "#8da0cb", 
+    Hominoidea       = "#fc8d62",    
+    Cercopithecoidea = "#66c2a5"     
+  )) +
+  
+  labs(x = "Hierarchy Linearity", 
+       y = "Hierarchy Steepness",
+       color = NULL) +
+  
+  theme_bw(base_size = 14) +
+  theme(
+    panel.grid.major   = element_line(color = "grey85"),
+    panel.grid.minor   = element_blank(),
+    axis.title         = element_text(face = "bold"),
+    legend.position    = c(0.02, 0.05),
+    legend.justification = c(0, 0),
+    legend.background  = element_rect(fill = alpha("white", 0.9), color = NA),
+    legend.text        = element_text(size = 10)
+  )
 
 
 #   5) Are hierarchies steeper and more linear when they are based on signals rather than aggression?
