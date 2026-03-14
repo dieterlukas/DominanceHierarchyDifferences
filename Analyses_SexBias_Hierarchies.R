@@ -710,7 +710,20 @@ table(data$species, data$sex)
 # We have thirty-eight species, with more data on females than males.
 # And within the same species, there are different numbers of observations of males and females (see table(data$species, data$sex))
 # Some species have only one sex (females without males).
+       
+data %>%
+  group_by(sex) %>%
+  summarise(
+    n       = n(),
+    Moyenne = round(mean(steepness, na.rm = TRUE), 3),
+    SD      = round(sd(steepness, na.rm = TRUE), 3),
+    Min     = round(min(steepness, na.rm = TRUE), 3),
+    Max     = round(max(steepness, na.rm = TRUE), 3),
+    Range   = paste0('[', Min, ' - ', Max, ']'),
+    .groups = 'drop'
+  )
 
+       
 mean_males <- mean(as.numeric(data$steepness[data$sex == "males"]), na.rm = TRUE)
 mean_females <- mean(as.numeric(data$steepness[data$sex == "females"]), na.rm = TRUE)
 mean_difference <- mean_males - mean_females
