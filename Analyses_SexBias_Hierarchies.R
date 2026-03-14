@@ -643,124 +643,59 @@ ggplot(data, aes(x = typeofbehaviour, y = steepness, fill = typeofbehaviour)) +
 
 
 
+########################################################################################################
 #PLOTs for section B.5) 
-#we need that typeofbehaviour is a factor
-data$typeofbehaviour <- factor(data$typeofbehaviour, levels = c("A","D","AD"))
 
-ggplot(data, aes(x = typeofbehaviour, y = steepness, fill = typeofbehaviour)) +
-  geom_violin(alpha = 0.3, color = NA) +          # distribution générale
-  geom_boxplot(width = 0.2, outlier.shape = 21, outlier.fill = "white") + # médiane + quartiles
-  scale_fill_manual(values = c("A" = "#1F77B4", "D" = "#2E8B57", "AD" = "#FF7F0E")) +
-  labs(
-    x = "Type of Interaction",
-    y = "Hierarchy Steepness") +
-  theme_bw(base_size = 16) +
-  theme(
-    axis.text = element_text(size = 12),
-    legend.position = "none"
-  )
+palette_complete <- wes_palette("GrandBudapest1")
+print(palette_complete)          
+print(tail(palette_complete))  
 
-
-#2nd plot
-p_steepness <- ggplot(data, aes(x = typeofbehaviour, y = steepness, fill = typeofbehaviour)) +
-  geom_violin(alpha = 0.3, color = NA) +
-  geom_boxplot(width = 0.2, outlier.shape = 21, outlier.fill = "white") +
-  scale_fill_manual(values = c("A" = "#1F77B4", "D" = "#2E8B57", "AD" = "#FF7F0E")) +
-  labs(x = "Type of Interaction", y = "Hierarchy Steepness") +
-  theme_bw(base_size = 16) +
-  theme(axis.text = element_text(size = 12),
-        legend.position = "none")
-
-#plot for linearity
-p_linearity <- ggplot(data, aes(x = typeofbehaviour, y = h_index, fill = typeofbehaviour)) +
-  geom_violin(alpha = 0.3, color = NA) +
-  geom_boxplot(width = 0.2, outlier.shape = 21, outlier.fill = "white") +
-  scale_fill_manual(values = c("A" = "#1F77B4", "D" = "#2E8B57", "AD" = "#FF7F0E")) +
-  labs(x = "Type of Interaction", y = "Hierarchy Linearity") +
-  theme_bw(base_size = 16) +
-  theme(axis.text = element_text(size = 12),
-        legend.position = "none")
-
-#merge both of them
-grid.arrange(p_steepness, p_linearity, ncol = 2)
-
-
-#3rd plot
-post_steepness <- post_steepness_typeofbehaviour
-post_linearity <- post_linearity_typeofbehaviour
-
-cred_steepness <- data.frame(
-  typeofbehaviour = factor(c("A","D","AD"), levels=c("A","D","AD")),
-  median = apply(post_steepness_typeofbehaviour$b, 2, median),
-  lower = apply(post_steepness_typeofbehaviour$b, 2, function(x) quantile(x, 0.025)),
-  upper = apply(post_steepness_typeofbehaviour$b, 2, function(x) quantile(x, 0.975))
-)
-
-cred_linearity <- data.frame(
-  typeofbehaviour = factor(c("A","D","AD"), levels=c("A","D","AD")),
-  median = apply(post_linearity_typeofbehaviour$b, 2, median),
-  lower = apply(post_linearity_typeofbehaviour$b, 2, function(x) quantile(x, 0.025)),
-  upper = apply(post_linearity_typeofbehaviour$b, 2, function(x) quantile(x, 0.975))
-)
-
-
-label_map <- c("A" = "Aggression", "D" = "Signal", "AD" = "Both")
-cols_type <- c("A"="#1F77B4", "D"="#2E8B57", "AD"="#FF7F0E")
-
-#steepness plot
 p_steepness <- ggplot() +
-  geom_errorbar(data = cred_steepness,
-                aes(x = typeofbehaviour, ymin = pmax(0, lower), ymax = pmin(1, upper), color = typeofbehaviour),
-                width = 0.1, size = 0.8, inherit.aes = FALSE) +
-  geom_point(data = cred_steepness,
-             aes(x = typeofbehaviour, y = median, color = typeofbehaviour),
-             size = 4, inherit.aes = FALSE) +
   geom_jitter(data = data,
               aes(x = typeofbehaviour, y = steepness, color = typeofbehaviour),
-              width = 0.15, size = 3, alpha = 0.6) +
-  scale_color_manual(values = cols_type) +
-  scale_x_discrete(labels = label_map) +  
-  labs(x="Type of Interaction", y="Hierarchy Steepness") +
-  ylim(0,1) +
+              width = 0.25, size = 5, alpha = 0.6, stroke = 0) +
+  geom_errorbar(data = cred_steepness,
+                aes(x = typeofbehaviour, ymin = pmax(0, lower), ymax = pmin(1, upper)),
+                width = 0.25, size = 0.5, color = "black") +
+  geom_point(data = cred_steepness,
+             aes(x = typeofbehaviour, y = median),
+             size = 5, shape = 21, fill = "white", color = "black", stroke = 1.2) +
+  scale_color_manual(values = c("#F1BB7B", "#5B1A18", "#FD6467")) +  
+  scale_x_discrete(labels = label_map) +
+  labs(x = NULL, y = "Hierarchy Steepness") +
+  ylim(0, 1) +
   theme_minimal(base_size = 16) +
-  theme(plot.title = element_text(face="bold", hjust=0.5),
-        axis.title = element_text(face="bold", size=16),
-        axis.text = element_text(size=14),
-        legend.position="none")
+  theme(legend.position = "none")
 
-#linearity plot
+
 p_linearity <- ggplot() +
-  geom_errorbar(data = cred_linearity,
-                aes(x = typeofbehaviour, ymin = pmax(0, lower), ymax = pmin(1, upper), color = typeofbehaviour),
-                width = 0.1, size = 0.8, inherit.aes = FALSE) +
-  geom_point(data = cred_linearity,
-             aes(x = typeofbehaviour, y = median, color = typeofbehaviour),
-             size = 4, inherit.aes = FALSE) +
   geom_jitter(data = data,
-              aes(x = typeofbehaviour, y = h_index, color = typeofbehaviour),
-              width = 0.15, size = 3, alpha = 0.6) +
-  scale_color_manual(values = cols_type) +
-  scale_x_discrete(labels = label_map) +  
-  labs(x="Type of Interaction", y="Hierarchy Linearity") +
-  ylim(0,1) +
+              aes(x = typeofbehaviour, y = steepness, color = typeofbehaviour),
+              width = 0.25, size = 5, alpha = 0.6, stroke = 0) +  
+  geom_errorbar(data = cred_steepness,
+                aes(x = typeofbehaviour, ymin = pmax(0, lower), ymax = pmin(1, upper)),
+                width = 0.25,    # plus étroites
+                size = 0.5,      # plus fines
+                color = "black")+
+  geom_point(data = cred_linearity,
+             aes(x = typeofbehaviour, y = median),
+             size = 5, shape = 21, fill = "white", color = "black", stroke = 1.2) +
+  scale_color_manual(values = c("#F1BB7B", "#5B1A18", "#FD6467")) +  
+  scale_x_discrete(labels = label_map) +
+  labs(x = "Type of Interaction", y = "Hierarchy Linearity") +
+  ylim(0, 1) +
   theme_minimal(base_size = 16) +
-  theme(plot.title = element_text(face="bold", hjust=0.5),
-        axis.title = element_text(face="bold", size=16),
-        axis.text = element_text(size=14),
-        legend.position="none")
+  theme(
+    axis.title = element_text(face = "bold", size = 16),
+    axis.text = element_text(size = 14),
+    legend.position = "none",
+    panel.grid.minor = element_blank()
+  )
 
-#merge them
-grid.arrange(p_steepness, p_linearity, ncol=2)
-
-p_steepness <- p_steepness + xlab(NULL)  
-p_linearity <- p_linearity + xlab("Type of Interaction")  
-grid.arrange(p_steepness, p_linearity, ncol=2)
-
-x.grob <- textGrob("Type of Interaction", gp=gpar(fontsize=16, fontface="bold"))
-
+# merge them
+x.grob <- textGrob("Type of Interaction", gp = gpar(fontsize = 16, fontface = "bold"))
 grid.arrange(p_steepness + xlab(NULL), p_linearity + xlab(NULL),
-             ncol=2,
-             bottom = x.grob)  
+             ncol = 2, bottom = x.grob)
 
 
 
