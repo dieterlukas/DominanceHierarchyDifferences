@@ -1036,7 +1036,8 @@ m_sexdifference <- ulam(
 precis(m_sexdifference)
 # we are interested in the value of b - the value close to 0 (with 89% intervals spanning 0) means that the differences within species are indistinguishable from the sex differences between species, a negative value would have meant that within species sex differences are smaller than those between the sexes. 
 
-# plot
+################################################################################################################################################
+#BONUS plot
 plot_df <- data.frame(
   diff = dat_list_sexdifference$steepness_difference,
   type = factor(dat_list_sexdifference$within,
@@ -1069,13 +1070,14 @@ P2 <- ggplot(b_post, aes(x = b)) +
   geom_vline(xintercept = 0, linetype = "dashed", linewidth = 1) +
   xlab("Effect of species identity (b)") +
   ylab("Posterior density") +
-  ggtitle("B. Bayesian estimate of species effect") +
+  ggtitle("B. Estimate of species effect") +
   theme_minimal(base_size = 15) +
   theme(
     plot.title = element_text(face = "bold")
   )
 
 grid.arrange(P1, P2, ncol = 2)
+
 
 
 # 7) If steepness differs in males and females, can it be linked to the fact that female hierarchies often include more individuals?
