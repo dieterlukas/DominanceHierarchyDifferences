@@ -964,7 +964,7 @@ contrast_steepness<-as.data.frame(inv_logit(samples_m_steepness_both$a_males)-in
 precis(contrast_steepness)
 
 
-                                                                                       
+###############################################################################################################                                                                                       
 #PLOT posteriors
 #transform
 steepness_males_post <- inv_logit(samples_m_steepness_both$a_males)
@@ -988,7 +988,7 @@ ggplot(plot_data, aes(x = steepness, fill = sex, color = sex)) +
     legend.title = element_blank(),
     axis.title = element_text(face = "bold"),
     axis.text = element_text(face = "bold")
-  )
+  ) 
 
 
                                                                                        
