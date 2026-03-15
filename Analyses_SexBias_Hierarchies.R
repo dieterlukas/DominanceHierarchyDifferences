@@ -965,7 +965,7 @@ precis(contrast_steepness)
 
 
 ###############################################################################################################                                                                                       
-#PLOT posteriors
+#PLOT posteriors                                                                                 
 #transform
 steepness_males_post <- inv_logit(samples_m_steepness_both$a_males)
 steepness_females_post <- inv_logit(samples_m_steepness_both$a_females)
@@ -1529,56 +1529,31 @@ results_h_index<-list(mean_females=mean_females,mean_males=mean_males,difference
 precis(results_h_index)
 
 #PLOT for C.8)
-#posteriors
-post_h_index_species <- extract.samples(m_h_index_species)
+##############################################################################################                                                                                       
+#PLOT posteriors
+#transform
+linearity_males_post <- inv_logit(samples_m_h_index_both$a_males)
+linearity_females_post <- inv_logit(samples_m_h_index_both$a_females)
 
-#mean
-mean_females <- inv_logit(post_h_index_species$a[,1])
-mean_males   <- inv_logit(post_h_index_species$a[,2])
-
-#df for ggplot
-plot_post_h_index <- data.frame(
-  h_index = c(mean_females, mean_males),
-  sex     = rep(c("Females","Males"), each = length(mean_females))
+#long
+plot_data <- data.frame(
+  linearity = c(linearity_males_post, linearity_females_post),
+  sex = rep(c("Males", "Females"), each = length(linearity_males_post))
 )
 
-#density plot
-C8p1<-ggplot(plot_post_h_index, aes(x = h_index, fill = sex, color = sex)) +
+ggplot(plot_data, aes(x = linearity, fill = sex, color = sex)) +
   geom_density(alpha = 0.3, size = 1.2) +
-  scale_color_manual(values = c("Females"="#443A83FF", "Males"="#FDE725FF")) +
-  scale_fill_manual(values = c("Females"="#443A83FF", "Males"="#FDE725FF")) +
-  xlab("h_index (posterior predictive)") +
-  ylab("Density") +
-  theme_minimal(base_size = 16) +
-  theme(legend.position = "top")
-
-
-#sparsenss
-sparseness_seq <- seq(min(dat_list_h_index_species$sparseness, na.rm=TRUE),
-                      max(dat_list_h_index_species$sparseness, na.rm=TRUE),
-                      length.out=100)
-
-#posteriors
-pred_females <- inv_logit(mean(post_h_index_species$a[,1]) + mean(post_h_index_species$c) * sparseness_seq)
-pred_males   <- inv_logit(mean(post_h_index_species$a[,2]) + mean(post_h_index_species$c) * sparseness_seq)
-
-plot_pred_sparseness <- data.frame(
-  sparseness = rep(sparseness_seq, 2),
-  h_index = c(pred_females, pred_males),
-  sex = rep(c("Females","Males"), each=length(sparseness_seq))
-)
-
-C8p2<-ggplot(plot_pred_sparseness, aes(x = sparseness, y = h_index, color = sex)) +
-  geom_line(size = 1.5) +
-  geom_point(data = data, aes(x = sparseness, y = h_index, color = sex), alpha = 0.3) +
-  scale_color_manual(values = c("Females"="#443A83FF","Males"="#FDE725FF")) +
-  xlab("Sparseness") +
-  ylab("h_index (predicted)") +
-  theme_minimal(base_size = 16) +
-  theme(legend.position="top")
-
-grid.arrange(C8p2, C8p1, ncol = 2)
-
+  scale_fill_manual(values = c("Males" = "#FDE725FF", "Females" = "#443A83FF")) +
+  scale_color_manual(values = c("Males" = "#FDE725FF", "Females" = "#443A83FF")) +
+  xlim(0, 1) +
+  xlab("Hierarchy linearity") +
+  ylab("Posterior density") +
+  theme_bw(base_size = 16) +
+  theme(
+    legend.title = element_blank(),
+    axis.title = element_text(face = "bold"),
+    axis.text = element_text(face = "bold")
+  ) 
 
 
 #   9) Is hierarchy linearity linked to hierarchy steepness in the same way in males and in females?
