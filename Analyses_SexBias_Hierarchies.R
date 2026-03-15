@@ -1670,7 +1670,25 @@ C9_plot2 <- ggplot(slopes_df, aes(x=slope, fill=sex, color=sex)) +
   theme(legend.position="top")
 
 grid.arrange(C9_plot1, C9_plot2, ncol=2)
+                           
+#####################################################################
+#PLOT steepness and linearity
 
+# 1. Graphs without legend
+steep_no_leg <- steep_descri + theme(legend.position = "none")
+linearity_no_leg <- linearity_descri + theme(legend.position = "none")
+
+# 2. extract legend
+leg <- get_legend(steep_descri)
+
+# 3. merge them
+grid.arrange(
+  leg,                                    
+  arrangeGrob(steep_no_leg, linearity_no_leg, ncol = 2), 
+  ncol = 1, 
+  heights = c(0.15, 1)                    
+)
+#####################################################################
 
                            
 #   10) Are hierarchies steeper for the sex that wins more fights - that is, is the proportion of intersexual fights that females win negatively related to the hierarchy steepness in males, and positively to the hierarchy steepness in females?
