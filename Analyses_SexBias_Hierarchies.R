@@ -1278,26 +1278,29 @@ ggplot(data, aes(x = sex, y = h_index, color = sex, fill = sex)) +
     legend.position = "none"
   )
 
-  #3rd plot
-height_points <- c("males" = 3.5, "females" = 4.5)
 
-ggplot(data, aes(x = h_index, color = sex, fill = sex)) +
+              
+#3rd plot
+height_points <- c("males" = 4.5, "females" = 5.5)
+
+ggplot(data, aes(x = steepness, color = sex, fill = sex)) +
   geom_density(size = 2, alpha = 0.3) +
   geom_jitter(data = data,
               aes(y = height_points[sex]),
-              width = 0, size = 3, alpha = 0.6, shape = 21, fill = "white") +
+              width = 0, size = 3, alpha = 0.6, shape = 21, fill = "white", stroke = 1.5) +
   scale_color_manual(values = cols_sex) +
   scale_fill_manual(values = cols_sex) +
-  labs(x = "Hierarchy Linearity", y = "Density") +
+  labs(x = "Hierarchy Steepness", y = "Density") +
   xlim(0,1) +
-  ylim(0,5) +  # ajuster pour que tous les points soient visibles
+  ylim(0,6) + 
   theme_minimal(base_size = 16) +
   theme(
     plot.title = element_text(face="bold", hjust=0.5),
     axis.title = element_text(face="bold", size=16),
     axis.text = element_text(size=14),
     legend.position="top"
-  )
+  )                                                                         
+
                                                                                        
 
 # First model, straight comparison not accounting for potential dependencies among observations in the sample 
