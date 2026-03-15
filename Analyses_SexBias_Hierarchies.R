@@ -1780,6 +1780,10 @@ data %>% group_by(sex,typeofbehaviour) %>% summarise(n())
 
 data$binarybehaviour<-ifelse(data$typeofbehaviour=="D","D","A")
 
+ data %>%
+  mutate(binarybehaviour = ifelse(typeofbehaviour == "D", "Signals (D)", "Agression (A+AD)")) %>%
+  count(sex, binarybehaviour, sort = TRUE) %>%
+  mutate(pourcentage = round(n / sum(n) * 100, 1))                          
 mdata_sex_behaviour <- list(
   behaviour=as.numeric(as.factor(data$binarybehaviour))-1,
   sex=as.numeric(as.factor(data$sex))
