@@ -1806,7 +1806,38 @@ results_sex_behaviour<-list(prop_onlydisplay_females=mean_prop_females,prop_only
 precis(results_sex_behaviour)
 
 
+#######################################################################################
+## PLOT classic
+data %>% 
+  mutate(binary = ifelse(typeofbehaviour == "D", "Signaux (D)", "Agression (A+AD)")) %>%
+  count(sex, binary) %>%
+  ggplot(aes(x = sex, y = n, fill = binary)) +
+  geom_col(position = "fill", 
+           color = "white",           # ← contours blancs
+           size = 1.2,                 # ← contours épais
+           width = 0.7) +              # ← barres moins larges
+  geom_text(aes(label = paste0(n, " (", round(n/sum(n)*100, 1), "%)")), 
+            position = position_fill(vjust = 0.5),    # ← chiffres centrés
+            color = "white", size = 4, fontface = "bold") +
+  scale_fill_manual(values = c("Signaux (D)" = "#5B1A18", 
+                               "Agression (A+AD)" = "#F1BB7B")) +
+  labs(x = "Sex", 
+       y = "Proportion of hierarchies",
+       fill = "Behavioral foundation") +
+  scale_x_discrete(labels = c("females", "males")) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "top",
+    legend.title = element_text(face = "bold", size = 12),
+    legend.text = element_text(size = 11),
+    axis.title = element_text(face = "bold", size = 13),
+    axis.text = element_text(size = 12),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 14)
+  ) 
 
+### Plot showing the model
 
 ### Estimation of whether the phylogenetic component is captured by the number of interactions
 library(brms)
