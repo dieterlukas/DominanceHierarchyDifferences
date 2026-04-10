@@ -109,7 +109,7 @@ Data
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 data <- read.csv("Comparative_primate_steepness_values.csv")
 
-#la phylogénie
+#phylo
 specieslist<-as.data.frame(matrix(unique(data$species),ncol=1,nrow=length(unique(data$species))))
 colnames(specieslist)<-"species"
 rownames(specieslist)<-specieslist$species
@@ -142,7 +142,7 @@ data_N <- data %>%
     species_label = str_to_sentence(species_label)
   )
 
-#steepness moyenes par espèce et par sexe
+#average steepness moyenes per espèce and sex
 data_steep <- data %>%
   group_by(species, sex) %>%
   summarise(
@@ -173,7 +173,7 @@ Initial tree
 p <- ggtree(mtree) + theme_tree2()
 p2 <- p %<+% data_N
 
-#etirement vertical
+#vertical spacing
 y_expand <- 2
 p2$data$y <- p2$data$y * y_expand
 ```
@@ -232,7 +232,7 @@ p_final <- p2 +
               linetype = "dotted",
               fontface = "italic") +
 
- # valeurs mâles
+ # males values
 geom_text(
   data = (text_data %>% filter(!is.na(males)) %>% mutate(sex = "males")),
   aes(x = x_male, y = y, label = sprintf("%.2f", males), color = sex),
@@ -242,7 +242,7 @@ geom_text(
   fontface = "bold"
 ) +
 
-# valeurs femelles
+# females values
 geom_text(
   data = (text_data %>% filter(!is.na(females)) %>% mutate(sex = "females")),
   aes(x = x_female, y = y, label = sprintf("%.2f", females), color = sex),
@@ -252,7 +252,7 @@ geom_text(
   fontface = "bold"
 ) +
 
-  # titre unique
+  # average steepness text
   annotate(
     "text",
     x = text_data$x_anchor[1] + 3,
@@ -262,7 +262,7 @@ geom_text(
     size = 4
   ) +
 
-  # légende clade
+  # clade legend
   geom_point(
     data = clade_legend,
     aes(x = x, y = y, fill = clade),
@@ -317,7 +317,176 @@ geom_text(
 p_final
 ```
 
+We want to investogate a bit more the steepness in the 3 phylogenetic group
 
+Descriptive about the phylogenetic group
+```{r}
+data$clade <- case_when(
+  data$species %in% c("Pan_troglodytes", "Pan_paniscus", "Gorilla_beringei", "Gorilla_gorilla") ~ "Hominoidea",
+  data$species %in% c("Cebus_capucinus", "Cebus_apella", "Saimiri_sciureus", "Alouatta_palliata") ~ "Platyrrhini",
+  TRUE ~ "Cercopithecoidea" 
+)
+
+clade_summary <- data %>%
+  group_by(clade) %>%
+  summarise(
+    N_matrices = n(),
+    N_species = n_distinct(species),
+    mean_steepness = round(mean(steepness, na.rm=T), 3),
+    sd_steepness = round(sd(steepness, na.rm=T), 3),
+    range_steepness = paste0(round(range(steepness, na.rm=T), 3), collapse = " - "),
+    .groups = 'drop'
+  )
+
+clade_sex_summary <- data %>%
+  group_by(clade, sex) %>%
+  summarise(
+    N_matrices = n(),
+    N_species = n_distinct(species),
+    mean_steepness = round(mean(steepness, na.rm=T), 3),
+    .groups = 'drop'
+  )
+```
+
+Put relevant informations in a dataframe
+```{r}
+clade_stats <- data %>%
+  group_by(clade) %>%
+  summarise(
+    N_matrices = n(),
+    N_species = n_distinct(species),
+    
+    # STEEPNESS
+    median_steepness = round(median(steepness, na.rm=T), 3),
+    mean_steepness = round(mean(steepness, na.rm=T), 3),
+    ci_lower_steep = round(quantile(steepness, 0.10, na.rm=T), 3),
+    ci_upper_steep = round(quantile(steepness, 0.90, na.rm=T), 3),
+    
+    # LINEARITY (h_index)
+    median_linearity = round(median(h_index, na.rm=T), 3),
+    mean_linearity = round(mean(h_index, na.rm=T), 3),
+    ci_lower_lin = round(quantile(h_index, 0.10, na.rm=T), 3),
+    ci_upper_lin = round(quantile(h_index, 0.90, na.rm=T), 3),
+    
+    .groups = 'drop'
+  )
+print(clade_stats)
+```
+
+```{r}
+label_map <- c("Cercopithecoidea" = "Cercopithecoidea", 
+               "Hominoidea" = "Hominoidea", 
+               "Platyrrhini" = "Platyrrhini")
+```
+
+
+PLOT the median steepness and linearity in relation to the 3 group
+```{r}
+#plot steepness median
+p_clades_steep_med <- ggplot() +
+  geom_jitter(data = data,
+              aes(x = clade, y = steepness, color = clade),
+              width = 0.25, size = 5, alpha = 0.6, stroke = 0) +
+  # Errorbar CI median
+  geom_errorbar(data = clade_stats,
+                aes(x = clade, ymin = ci_lower_steep, ymax = ci_upper_steep),
+                width = 0.25, size = 0.5, color = "black") +
+  geom_point(data = clade_stats,
+             aes(x = clade, y = median_steepness),
+             size = 5, shape = 21, fill = "white", color = "black", stroke = 2) +
+  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#8da0cb")) + 
+  scale_x_discrete(labels = label_map) +
+  labs(x = NULL, y = "Hierarchy Steepness") +
+  ylim(0, 1) +
+  theme_minimal(base_size = 16) +
+  theme(axis.title = element_text(face = "bold", size = 16),
+        axis.text = element_text(size = 10),
+        legend.position = "none")
+
+
+p_clades_lin_med <- ggplot() +
+  geom_jitter(data = data,
+              aes(x = clade, y = h_index, color = clade),
+              width = 0.25, size = 5, alpha = 0.6, stroke = 0) +
+  # Errorbar CI median
+  geom_errorbar(data = clade_stats,
+                aes(x = clade, ymin = ci_lower_lin, ymax = ci_upper_lin),
+                width = 0.25, size = 0.5, color = "black") +
+  geom_point(data = clade_stats,
+             aes(x = clade, y = median_linearity),
+             size = 5, shape = 21, fill = "white", color = "black", stroke = 2) +
+  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#8da0cb")) + 
+  labs(x = "Clade", y = "Hierarchy Linearity") +
+  ylim(0, 1) +
+  theme_minimal(base_size = 16) +
+  theme(
+    axis.title = element_text(face = "bold", size = 16),
+    axis.text = element_text(size = 10),
+    legend.position = "none",
+    panel.grid.minor = element_blank()
+  )
+
+# Merge them
+x.grob_1 <- textGrob("Clade", gp = gpar(fontsize = 16, fontface = "bold"))
+grid.arrange(p_clades_steep_med + xlab(NULL), p_clades_lin_med + xlab(NULL),
+             ncol = 2, bottom = x.grob_1)
+```
+
+
+PLOT the mean steepness and linearity in relation to the 3 group
+```{r}
+#plot steepness mean
+p_clades_steep_mean <- ggplot() +
+  geom_jitter(data = data,
+              aes(x = clade, y = steepness, color = clade),
+              width = 0.25, size = 5, alpha = 0.6, stroke = 0) +
+  # Errorbar CI mean
+  geom_errorbar(data = clade_stats,
+                aes(x = clade, ymin = ci_lower_steep, ymax = ci_upper_steep),
+                width = 0.25, size = 0.5, color = "black") +
+  geom_point(data = clade_stats,
+             aes(x = clade, y = mean_steepness),
+             size = 5, shape = 21, fill = "white", color = "black", stroke = 2) +
+  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#8da0cb")) + 
+  scale_x_discrete(labels = label_map) +
+  labs(x = NULL, y = "Hierarchy Steepness") +
+  ylim(0, 1) +
+  theme_minimal(base_size = 16) +
+  theme(axis.title = element_text(face = "bold", size = 16),
+        axis.text = element_text(size = 10),
+        legend.position = "none")
+
+
+p_clades_lin_med <- ggplot() +
+  geom_jitter(data = data,
+              aes(x = clade, y = h_index, color = clade),
+              width = 0.25, size = 5, alpha = 0.6, stroke = 0) +
+  # Errorbar CI mean
+  geom_errorbar(data = clade_stats,
+                aes(x = clade, ymin = ci_lower_lin, ymax = ci_upper_lin),
+                width = 0.25, size = 0.5, color = "black") +
+  geom_point(data = clade_stats,
+             aes(x = clade, y = mean_linearity),
+             size = 5, shape = 21, fill = "white", color = "black", stroke = 2) +
+  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#8da0cb")) + 
+  labs(x = "Clade", y = "Hierarchy Linearity") +
+  ylim(0, 1) +
+  theme_minimal(base_size = 16) +
+  theme(
+    axis.title = element_text(face = "bold", size = 16),
+    axis.text = element_text(size = 10),
+    legend.position = "none",
+    panel.grid.minor = element_blank()
+  )
+
+# Merge them
+x.grob_1 <- textGrob("Clade", gp = gpar(fontsize = 16, fontface = "bold"))
+grid.arrange(p_clades_steep_med + xlab(NULL), p_clades_lin_med + xlab(NULL),
+             ncol = 2, bottom = x.grob_1)
+```
+
+
+###############################################################################
 
 
 
