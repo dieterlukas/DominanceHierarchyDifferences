@@ -1,0 +1,132 @@
+---
+title: "SteepnessFemaleDominantSp"
+output: html_document
+date: "2026-04-09"
+---
+
+We first load the required packages
+```{r}
+library(ggtree)
+library(ggplot2)
+library(dplyr)
+library(stringr)
+library(tidytree)
+```
+
+Loading the data
+```{r}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+data <- read.csv("Comparative_primate_steepness_values.csv")
+
+
+# Integrate the additional variable, on the intersexual dominance relationship, to the dataset (the averaged percentage of fights won by females).
+dominancedata<-read.csv(url("https://github.com/dieterlukas/primate_power/raw/refs/heads/main/data/PopulationData_IntersexDominance.csv"))
+intersex_dominance<-as.data.frame(dominancedata %>%
+                                    group_by(species=corrected_species_id) %>%
+                            summarise(perc_won_females=mean(perc_won_females,na.rm=T)))
+
+data<-left_join(data,intersex_dominance,by="species")
+
+# Recover the averaged percentage of fights won by females in dominancedata for Sapajus_apella and and assign it in data for the species Cebus_apella
+dominancedata %>%
+  filter(corrected_species_id == "Sapajus_apella") %>%
+  summarise(mean_perc = mean(perc_won_females, na.rm = TRUE))
+data$perc_won_females[data$species == "Cebus_apella"] <- 33
+
+# Some species that we have in data do not appear in dominancedata, which produces NA entries. I will delete these lines in the next section
+```
+
+```{r}
+data_dominance<-data[is.na(data$perc_won_females)==F,]
+
+data_dominance$perc_won_females<-log(data_dominance$perc_won_females+0.01)
+```
+
+Remind the analyses we did
+```{r}
+mdata_sex_steepness_dominance <- list(
+  femalesteepness=as.numeric(data_dominance[data_dominance$sex=="females",]$steepness),
+  malesteepness=as.numeric(data_dominance[data_dominance$sex=="males",]$steepness),
+  dominance_femalevalues=standardize(data_dominance[data_dominance$sex=="females",]$perc_won_females),
+  dominance_malevalues=standardize(data_dominance[data_dominance$sex=="males",]$perc_won_females),
+  femalesparseness=standardize(data_dominance[data_dominance$sex=="females",]$sparseness),
+  malesparseness=standardize(data_dominance[data_dominance$sex=="males",]$sparseness)
+)
+
+m_sex_steepness_dominance <- ulam(
+  alist(
+    femalesteepness ~ dbeta2(femalemean,femalevariance),
+    logit(femalemean) <-a+b*femalesparseness+cf*dominance_femalevalues,
+    malesteepness ~ dbeta2(malemean,malevariance),
+    logit(malemean) <-a+b*malesparseness+(cf+maleoffset)*dominance_malevalues,
+    a~dnorm(0,1),
+    b~dnorm(0,1),
+    cf~dnorm(0,1),
+    maleoffset~dnorm(0,1),
+    femalevariance~dexp(10),
+    malevariance~dexp(10)
+  ) , data=mdata_sex_steepness_dominance , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+
+# Check whether the male-offset is different from zero - if it is positive, that means that male hierarchies are steeper than female hierarchies when females are dominant; if it is negative, than male hierarchies are less steep than female hierarchies when females are dominant:
+precis(m_sex_steepness_dominance)
+# We can also check the cf value - if it is positive, that means that hierarchies of females are steeper when females win more fights and if the maleoffset is zero, it also means that male hierarchies are steeper when females win more fights; if it is negative, hierarchies are steeper when males are dominant.
+```
+
+first plot
+```{r}
+# We can plot this - female values are black, male values are red
+plot(data_dominance$steepness~data_dominance$perc_won_females,col=as.factor(data_dominance$sex))
+
+# It looks like there is a confound here - we do not have hierarchy data for males from species where males always wins the fights. This is because the species where males always win fights, there is usually only a single male per group - that means we cannot calculate the hierarchy among the males (in our data, those species are gorillas, hamadryas baboons, and red howler monkeys, which are all polygynous). 
+```
+
+
+
+Steepness in female dominant species: maybe we do want to include a figure for this. I would keep it simple by plotting the raw values, with the regression line going through it (ie. based on: plot(data$steepness~data$perc_won_females,col=as.factor(data$sex)) plus the regression line
+
+Dieter's advice
+```{r}
+plot(data$steepness~data$perc_won_females,col=as.factor(data$sex)) 
+```
+
+```{r}
+plot(data$steepness ~ data$perc_won_females,
+     col = as.factor(data$sex),
+     xlab = "Mean proportion of agonistic interactions won by females (%)",
+     ylab = "Steepness of female dominance hierarchy",
+     pch = 16)
+
+abline(lm(steepness ~ perc_won_females, data = data),
+       col = "black", lty = 2, lwd = 1.5)
+
+legend("topright",
+       legend = levels(as.factor(data$sex)),
+       col = 1:2, pch = 16,
+       bty = "n",
+       title = "Sex role")
+```
+
+
+```{r}
+p <- ggplot(data, aes(x = perc_won_females, y = steepness, color = sex)) +
+  geom_point(size = 3, alpha = 0.8) +
+  geom_smooth(method = "lm", formula = y ~ x,
+              se = TRUE, level = 0.95,
+              size = 1.2, color = "black", linetype = 2) +
+  scale_color_viridis_d(name = "") +
+  labs(
+    x = "Mean percentage of agonistic interactions won by females (%)",
+    y = "Steepness of female dominance hierarchy"
+  ) +
+  theme_classic(base_size = 12) +
+  theme(legend.position = "top")
+
+print(p)
+```
+
+
+
+
+
+
+
