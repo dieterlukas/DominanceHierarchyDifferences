@@ -245,8 +245,8 @@ m_h_index_numberofindividuals <- ulam(
 # We check the results - we are interested in the effect measured in the factor b
 precis(m_h_index_numberofindividuals)
 plot(data$h_index~standardize(data$numberofindividuals))
-# Here is no effect, so we do not need to account for it
-### DIETER there is an effect here!!
+# Negative effect, less linear when there are more individuals
+
 
 
 # 3a) steepness different in captivity than in the wild
@@ -590,13 +590,12 @@ dat_list_steepness_typeofbehaviour <- list(
 m_steepness_typeofbehaviour <- ulam(
   alist(
     steepness ~ dbeta2(mean,variance),
-    logit(mean) <-a + b[typeofbehaviour],
-    a ~dnorm(0.5,1),   
+    logit(mean) <- b[typeofbehaviour],
     b[typeofbehaviour] ~dnorm(0,1),
     variance ~ dexp(10)
   ) , data=dat_list_steepness_typeofbehaviour , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
-# We check the results - we are interested in the effect measured in the factor b
-precis(m_steepness_typeofbehaviour)
+# We check the results - we are interested in the effect measured in the factor b, the three values for the three types of behaviour
+precis(m_steepness_typeofbehaviour,depth=2)
 post_steepness_typeofbehaviour<-extract.samples(m_steepness_typeofbehaviour)
 # Comparing D versus A
 contrast_D_A<-post_steepness_typeofbehaviour$b[,3]-post_steepness_typeofbehaviour$b[,1]
@@ -611,13 +610,12 @@ dat_list_linearity_typeofbehaviour <- list(
 m_linearity_typeofbehaviour <- ulam(
   alist(
     linearity ~ dbeta2(mean,variance),
-    logit(mean) <-a + b[typeofbehaviour],
-    a ~dnorm(0.5,1),   
+    logit(mean) <-b[typeofbehaviour],  
     b[typeofbehaviour] ~dnorm(0,1),
     variance ~ dexp(10)
   ) , data=dat_list_linearity_typeofbehaviour , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
 # We check the results - we are interested in the effect measured in the factor b
-precis(m_linearity_typeofbehaviour)
+precis(m_linearity_typeofbehaviour, depth=2)
 post_linearity_typeofbehaviour<-extract.samples(m_linearity_typeofbehaviour)
 # Comparing D versus A
 contrast_D_A<-post_linearity_typeofbehaviour$b[,3]-post_linearity_typeofbehaviour$b[,1]
@@ -645,10 +643,19 @@ ggplot(data, aes(x = typeofbehaviour, y = steepness, fill = typeofbehaviour)) +
 
 ########################################################################################################
 #PLOTs for section B.5) 
+# install.packages("wesanderson")
+# library(wesanderson)
+# palette_complete <- wes_palette("GrandBudapest1")
+# print(palette_complete)          
+# print(tail(palette_complete))  
 
-palette_complete <- wes_palette("GrandBudapest1")
-print(palette_complete)          
-print(tail(palette_complete))  
+label_map <- c("Aggression", "Signal", "Both") 
+cred_steepness <- (precis(m_steepness_typeofbehaviour,dept=2)[1:3,c(1,3:4)])
+cred_steepness[1,]<-inv_logit(cred_steepness[1,])
+cred_steepness[2,]<-inv_logit(cred_steepness[2,])
+cred_steepness[3,]<-inv_logit(cred_steepness[3,])
+colnames(cred_steepness)<-c("median","lower","upper")
+cred_steepness$typeofbehaviour<-c("A","D","AD")
 
 p_steepness <- ggplot() +
   geom_jitter(data = data,
@@ -668,11 +675,18 @@ p_steepness <- ggplot() +
   theme(legend.position = "none")
 
 
+cred_linearity <- (precis(m_linearity_typeofbehaviour,dept=2)[1:3,c(1,3:4)])
+cred_linearity[1,]<-inv_logit(cred_linearity[1,])
+cred_linearity[2,]<-inv_logit(cred_linearity[2,])
+cred_linearity[3,]<-inv_logit(cred_linearity[3,])
+colnames(cred_linearity)<-c("median","lower","upper")
+cred_linearity$typeofbehaviour<-c("A","D","AD")
+
 p_linearity <- ggplot() +
   geom_jitter(data = data,
-              aes(x = typeofbehaviour, y = steepness, color = typeofbehaviour),
+              aes(x = typeofbehaviour, y = h_index, color = typeofbehaviour),
               width = 0.25, size = 5, alpha = 0.6, stroke = 0) +  
-  geom_errorbar(data = cred_steepness,
+  geom_errorbar(data = cred_linearity,
                 aes(x = typeofbehaviour, ymin = pmax(0, lower), ymax = pmin(1, upper)),
                 width = 0.25,    # plus étroites
                 size = 0.5,      # plus fines
@@ -683,7 +697,7 @@ p_linearity <- ggplot() +
   scale_color_manual(values = c("#F1BB7B", "#5B1A18", "#FD6467")) +  
   scale_x_discrete(labels = label_map) +
   labs(x = "Type of Interaction", y = "Hierarchy Linearity") +
-  ylim(0, 1) +
+  ylim(0, 1.01) +
   theme_minimal(base_size = 16) +
   theme(
     axis.title = element_text(face = "bold", size = 16),
