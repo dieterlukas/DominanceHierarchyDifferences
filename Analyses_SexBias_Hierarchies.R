@@ -462,7 +462,7 @@ ggplot(plot_4_data_sex, aes(x = linearity, y = steepness, color = sex)) +
   
   scale_color_manual(values = c(
     females = "#443A83FF",
-    males = "#FDE725FF"
+    males = "gold3"
   )) +
   
   labs(
@@ -511,7 +511,7 @@ ggplot(plot_4_data_sex, aes(x = linearity, y = steepness)) +
   ) +
   scale_color_manual(values = c(
     females = "#443A83FF",
-    males   = "#FDE725FF"
+    males   = "gold3"
   )) +
   scale_shape_manual(values = c(
     Platyrrhini      = 16,
@@ -757,7 +757,7 @@ legend(x = "topleft", c("Males", "Females"), pch = 19, col = c("#FDE725FF", "#44
 # Indeed, the difference between males and females is not striking.
 
 #plot 2
-cols_sex <- c("males"="#FDE725FF", "females"="#443A83FF")
+cols_sex <- c("males"="gold3", "females"="#443A83FF")
 
 ggplot(data, aes(x = sex, y = steepness, color = sex, fill = sex)) +
   geom_violin(alpha = 0.2, width = 0.3, color = NA) +
@@ -992,8 +992,8 @@ plot_data <- data.frame(
  
 ggplot(plot_data, aes(x = steepness, fill = sex, color = sex)) +
   geom_density(alpha = 0.3, size = 1.2) +
-  scale_fill_manual(values = c("Males" = "#FDE725FF", "Females" = "#443A83FF")) +
-  scale_color_manual(values = c("Males" = "#FDE725FF", "Females" = "#443A83FF")) +
+  scale_fill_manual(values = c("Males" = "gold3", "Females" = "#443A83FF")) +
+  scale_color_manual(values = c("Males" = "gold3", "Females" = "#443A83FF")) +
   xlim(0, 1) +
   xlab("Hierarchy steepness") +
   ylab("Posterior density") +
@@ -1067,8 +1067,8 @@ b_post <- data.frame(b = post$b)
 P1 <- ggplot(plot_df, aes(x = diff, fill = type, color = type)) +
   geom_density(alpha = 0.3, size = 1.2) +
   geom_vline(xintercept = 0, linetype = "dashed", linewidth = 1) +
-  scale_fill_manual(values = c("#3B528BFF", "#FDE725FF")) +
-  scale_color_manual(values = c("#3B528BFF", "#FDE725FF")) +
+  scale_fill_manual(values = c("#3B528BFF", "gold3")) +
+  scale_color_manual(values = c("#3B528BFF", "gold3")) +
   xlab("Sex difference in steepness (male − female)") +
   ylab("Density") +
   ggtitle("A. Sex differences in steepness") +
@@ -1213,7 +1213,7 @@ C7p1 <- ggplot(plot_pred_ind, aes(x=individuals, y=steepness, color=sex)) +
   geom_point(data=data, 
              aes(x=standardize(numberofindividuals), y=steepness, color=sex), 
              alpha=0.3) +
-  scale_color_manual(values=c("Females"="#443A83FF","Males"="#FDE725FF")) +
+  scale_color_manual(values=c("Females"="#443A83FF","Males"="gold3")) +
   xlab("Standardized number of individuals") +
   ylab("Steepness") +
   theme_minimal(base_size=16) +
@@ -1239,8 +1239,8 @@ plot_post_model_ind <- data.frame(
 #density plot
 C7p2<-ggplot(plot_post_model_ind, aes(x = steepness, color = sex, fill = sex)) +
   geom_density(alpha = 0.3, size = 1) +
-  scale_color_manual(values = c("Females"="#443A83FF", "Males"="#FDE725FF")) +
-  scale_fill_manual(values = c("Females"="#443A83FF", "Males"="#FDE725FF")) +
+  scale_color_manual(values = c("Females"="#443A83FF", "Males"="gold3")) +
+  scale_fill_manual(values = c("Females"="#443A83FF", "Males"="gold3")) +
   xlab("Steepness (posterior predictive)") +
   ylab("Density") +
   theme_minimal(base_size = 16) +
@@ -1274,7 +1274,7 @@ legend(x = "topleft", c("Males", "Females"), pch = 19, col = c("#FDE725FF", "#44
 # Indeed, the difference between males and females is not striking.
 
 #plot 2
-cols_sex <- c("males"="#FDE725FF", "females"="#443A83FF")
+cols_sex <- c("males"="gold3", "females"="#443A83FF")
 
 ggplot(data, aes(x = sex, y = h_index, color = sex, fill = sex)) +
   geom_violin(alpha = 0.2, width = 0.3, color = NA) +
@@ -1560,8 +1560,8 @@ plot_data <- data.frame(
 
 ggplot(plot_data, aes(x = linearity, fill = sex, color = sex)) +
   geom_density(alpha = 0.3, size = 1.2) +
-  scale_fill_manual(values = c("Males" = "#FDE725FF", "Females" = "#443A83FF")) +
-  scale_color_manual(values = c("Males" = "#FDE725FF", "Females" = "#443A83FF")) +
+  scale_fill_manual(values = c("Males" = "gold3", "Females" = "#443A83FF")) +
+  scale_color_manual(values = c("Males" = "gold3", "Females" = "#443A83FF")) +
   xlim(0, 1) +
   xlab("Hierarchy linearity") +
   ylab("Posterior density") +
@@ -1610,7 +1610,7 @@ points(data[data$sex=="males",]$steepness~data[data$sex=="males",]$h_index,col="
                                                                                        
 ggplot(data, aes(x = h_index, y = steepness, color = sex)) +
   geom_point(size = 3, alpha = 0.6) +
-  scale_color_manual(values=c("females"="#443A83FF", "males"="#FDE725FF")) +
+  scale_color_manual(values=c("females"="#443A83FF", "males"="gold3")) +
   xlab("Linearity (h_index)") +
   ylab("Steepness") +
   theme_minimal(base_size = 16) +
@@ -1659,8 +1659,8 @@ C9_plot1 <- ggplot() +
   geom_point(data=data, aes(x=h_index, y=steepness, color=sex), alpha=0.5, size=3) +
   geom_ribbon(data=pred_plot, aes(x=h_index, ymin=lower, ymax=upper, fill=sex), alpha=0.2) +
   geom_line(data=pred_plot, aes(x=h_index, y=median, color=sex), size=1.5) +
-  scale_color_manual(values=c("Females"="#443A83FF", "Males"="#FDE725FF")) +
-  scale_fill_manual(values=c("Females"="#443A83FF", "Males"="#FDE725FF")) +
+  scale_color_manual(values=c("Females"="#443A83FF", "Males"="gold3")) +
+  scale_fill_manual(values=c("Females"="#443A83FF", "Males"="gold3")) +
   xlab("Linearity (h_index)") +
   ylab("Steepness") +
   theme_minimal(base_size=16) +
@@ -1676,8 +1676,8 @@ slopes_df <- data.frame(
 
 C9_plot2 <- ggplot(slopes_df, aes(x=slope, fill=sex, color=sex)) +
   geom_density(alpha=0.3, size=1) +
-  scale_color_manual(values=c("Females"="#443A83FF", "Males"="#FDE725FF")) +
-  scale_fill_manual(values=c("Females"="#443A83FF", "Males"="#FDE725FF")) +
+  scale_color_manual(values=c("Females"="#443A83FF", "Males"="gold3")) +
+  scale_fill_manual(values=c("Females"="#443A83FF", "Males"="gold3")) +
   xlab("Posterior slope (linearity effect on steepness)") +
   ylab("Density") +
   theme_minimal(base_size=16) +
@@ -1775,7 +1775,7 @@ C10p1 <- ggplot(plot_pred, aes(x = dominance, y = steepness, color = sex)) +
     ),
     alpha = 0.3
   ) +
-  scale_color_manual(values=c("Females"="#443A83FF","Males"="#FDE725FF")) +
+  scale_color_manual(values=c("Females"="#443A83FF","Males"="gold3")) +
   xlab("Dominance femelle (standardisée)") +
   ylab("Steepness") +
   theme_minimal(base_size = 16) +
