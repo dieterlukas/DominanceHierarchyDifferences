@@ -281,7 +281,7 @@ geom_text(
   ) +
   
   scale_color_manual(
-    values = c("males" = "#FDE725FF", "females" = "#443A83FF"),
+    values = c("males" = "gold3", "females" = "#443A83FF"),
     name = NULL
   ) +
 
