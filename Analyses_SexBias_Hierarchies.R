@@ -1809,7 +1809,7 @@ m_sex_behaviour <- ulam(
     logit(p) <-a[sex],
     a[sex]~dnorm(0,1)
   ) , data=mdata_sex_behaviour , chains=4 , cores=4 , cmdstan=T, messages=FALSE, refresh=0)
-
+precis(m_sex_behaviour,depth=2)
 posterior_sex_behaviour<-extract.samples(m_sex_behaviour)
 mean_prop_females<-inv_logit(posterior_sex_behaviour$a[,1])
 mean_prop_males<-inv_logit(posterior_sex_behaviour$a[,2])
@@ -1823,7 +1823,7 @@ precis(results_sex_behaviour)
 #######################################################################################
 ## PLOT classic
 data %>% 
-  mutate(binary = ifelse(typeofbehaviour == "D", "Signaux (D)", "Agression (A+AD)")) %>%
+  mutate(binary = ifelse(typeofbehaviour == "D", "Signal (D)", "Aggression (A+AD)")) %>%
   count(sex, binary) %>%
   ggplot(aes(x = sex, y = n, fill = binary)) +
   geom_col(position = "fill", 
@@ -1833,8 +1833,8 @@ data %>%
   geom_text(aes(label = paste0(n, " (", round(n/sum(n)*100, 1), "%)")), 
             position = position_fill(vjust = 0.5),    # ← chiffres centrés
             color = "white", size = 4, fontface = "bold") +
-  scale_fill_manual(values = c("Signaux (D)" = "#5B1A18", 
-                               "Agression (A+AD)" = "#F1BB7B")) +
+  scale_fill_manual(values = c("Signal (D)" = "#5B1A18", 
+                               "Aggression (A+AD)" = "#F1BB7B")) +
   labs(x = "Sex", 
        y = "Proportion of hierarchies",
        fill = "Behavioral foundation") +
@@ -1852,6 +1852,52 @@ data %>%
   ) 
 
 ### Plot showing the model
+
+cred_typeofbehaviour <- (precis(m_sex_behaviour,dept=2)[1:2,c(1,3:4)])
+cred_typeofbehaviour[1,]<-inv_logit(cred_typeofbehaviour[1,])
+cred_typeofbehaviour[2,]<-inv_logit(cred_typeofbehaviour[2,])
+colnames(cred_typeofbehaviour)<-c("median","lower","upper")
+cred_typeofbehaviour$binary<-c("females","males")
+
+
+
+data %>% 
+  mutate(binary = ifelse(typeofbehaviour == "D", "Signal (D)", "Aggression (A+AD)")) %>%
+  count(sex, binary) %>%
+  ggplot(aes(x = sex, y = n, fill = binary)) +
+  geom_col(position = "fill", 
+           color = "white",           # ← contours blancs
+           size = 1.2,                 # ← contours épais
+           width = 0.7) +              # ← barres moins larges
+  geom_text(aes(label = paste0("n = ", n)), 
+            position = position_fill(vjust = 0.5),    # ← chiffres centrés
+            color = "white", size = 4, fontface = "bold") +
+  scale_fill_manual(values = c("Signal (D)" = "#5B1A18", 
+                               "Aggression (A+AD)" = "#F1BB7B")) +
+  geom_point(data = cred_typeofbehaviour,
+             aes(x = binary, y = median),
+             size = 6, shape = 21, fill = "black", color = "white", stroke = 1.2,position="stack")   +
+  geom_segment(data = cred_typeofbehaviour, aes(x = binary, xend = binary, y = lower, yend = upper), color = "white", size = 2, linetype = "solid",position="stack") +
+  geom_segment(data = cred_typeofbehaviour, aes(x = binary, xend = binary, y = lower, yend = upper), color = "black", size = 1.5, linetype = "solid",position="stack") +
+  labs(x = "Sex", 
+       y = "Proportion of hierarchies",
+       fill = "Type of Behaviour") +
+  scale_x_discrete(labels = c("females", "males"))  +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "top",
+    legend.title = element_text(face = "bold", size = 12),
+    legend.text = element_text(size = 11),
+    axis.title = element_text(face = "bold", size = 13),
+    axis.text = element_text(size = 12),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 14)
+  ) 
+
+
+
+
 
 ### Estimation of whether the phylogenetic component is captured by the number of interactions
 library(brms)
