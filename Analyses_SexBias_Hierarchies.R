@@ -1572,6 +1572,52 @@ ggplot(plot_data, aes(x = linearity, fill = sex, color = sex)) +
     axis.text = element_text(face = "bold")
   ) 
 
+#   8bis) If linearity differs in males and females, can it be linked to the relationship between linearity and group size?
+data$h_index<-data$h_index-0.001
+
+male_linearity <- as.numeric(data$h_index[data$sex == "males"])
+female_linearity <- as.numeric(data$h_index[data$sex == "females"])
+
+N_female_observations <- length(female_linearity)
+N_male_observations   <- length(male_linearity)
+
+individuals <- standardize(data$numberofindividuals)
+
+dat_list_linearity_individuals <- list(
+  linearity = as.numeric(c(female_linearity, male_linearity)),
+  sex = c(rep(1, N_female_observations), rep(2, N_male_observations)),
+  individuals = c(individuals[data$sex == "females"],
+                  individuals[data$sex == "males"])
+)
+
+m_linearity_individuals <- ulam(
+  alist(
+    linearity ~ dbeta2(mean, variance),
+    logit(mean) <- a[sex] + b * individuals,
+    a[sex] ~ dnorm(0.5, 1),
+    b ~ dnorm(0, 1),
+    variance ~ dexp(10)
+  ),
+  data = dat_list_linearity_individuals,
+  chains = 4, cores = 4, log_lik = TRUE,
+  cmdstan = TRUE, messages = FALSE, refresh = 0
+)
+
+post_linearity_individuals <- extract.samples(m_linearity_individuals)
+
+mean_females <- inv_logit(post_linearity_individuals$a[,1])
+mean_males   <- inv_logit(post_linearity_individuals$a[,2])
+
+difference_linearity <- mean_males - mean_females
+difference_linearity_individuals <- inv_logit(post_linearity_individuals$a[,2]) - inv_logit(post_linearity_individuals$a[,1])
+
+results_linearity<-list(mean_females=mean_females,mean_males=mean_males,difference_linearity=difference_linearity_individuals)
+
+precis(results_linearity)
+
+
+
+
 
 #   9) Is hierarchy linearity linked to hierarchy steepness in the same way in males and in females?
 
