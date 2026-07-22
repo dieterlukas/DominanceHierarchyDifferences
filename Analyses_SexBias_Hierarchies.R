@@ -4,11 +4,11 @@
 # To address this aim, we will answer the following questions:
 
 # A) Are our measures robust?  
-#   1) Are hierarchy steepness and linearity sensitive to sparseness and nb of interactions? 
+#   1) Are hierarchy steepness, linearity and DCI sensitive to sparseness and nb of interactions? 
 #   
-#   2) Are hierarchy steepness and linearity sensitive to the nb of individuals included in the hierarchy?
+#   2) Are hierarchy steepness, linearity and DCI sensitive to the nb of individuals included in the hierarchy?
 #
-#   3) Are hierarchy steepness and linearity different in captivity than in the wild?
+#   3) Are hierarchy steepness, linearity and DCI different in captivity than in the wild?
 
 # B) Are there dominance types?  
 #   4) Are hierarchy steepness and linearity correlated across species (w. or without accounting for phylogenetic relatedness)?
@@ -362,6 +362,7 @@ mdata_phylogeny_steepness_linearity <- list(
   steepness=data$steepness,
   linearity=data$h_index,
   sparseness=data$sparseness,
+  dci=data$dci,
   species=as.integer(as.factor(data$species)),
   N_spp=length(unique(data$species))
 )
@@ -371,7 +372,7 @@ mdata_phylogeny_steepness_linearity$Dmat<-Dmat/max(Dmat)
 colnames(mdata_phylogeny_steepness_linearity$Dmat)<-as.integer(as.factor(colnames(mdata_phylogeny_steepness_linearity$Dmat)))
 rownames(mdata_phylogeny_steepness_linearity$Dmat)<-as.integer(as.factor(rownames(mdata_phylogeny_steepness_linearity$Dmat)))
 
-m_steepness_steepness_linearity <- ulam(
+m_steepness_linearity <- ulam(
   alist(
     steepness ~ dbeta2(mean,variance),
     logit(mean) <-a+b[species]+c*sparseness+d*linearity,
@@ -385,7 +386,7 @@ m_steepness_steepness_linearity <- ulam(
     variance~dexp(10)
   ) , data=mdata_phylogeny_steepness_linearity , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
 
-precis(m_steepness_steepness_linearity)
+precis(m_steepness_linearity)
 plot(data$steepness~data$h_index)
 # Linearity and steepness are positively correlated
 
@@ -393,9 +394,14 @@ plot(data$steepness~data$h_index)
 # PLOT for B.4) 
 
 ##1st plot -  classic
+plot_4_data <- data.frame(
+  steepness = mdata_phylogeny_steepness_linearity$steepness,
+  linearity = mdata_phylogeny_steepness_linearity$linearity,
+  dci = mdata_phylogeny_steepness_linearity$dci,
+  species = factor(data$species))  # if we want to put some colours
 
 #posterior
-post <- extract.samples(m_steepness_steepness_linearity)
+post <- extract.samples(m_steepness_linearity)
 
 #smooth curve
 linearity_seq <- seq(min(plot_4_data$linearity), max(plot_4_data$linearity), length.out = 100)
@@ -413,13 +419,19 @@ pred_df <- data.frame(
   upper = apply(preds, 1, quantile, 0.945)
 )
 
-#rawdata
-plot_4_data <- data.frame(
-  steepness = mdata_phylogeny_steepness_linearity$steepness,
-  linearity = mdata_phylogeny_steepness_linearity$linearity,
-  species = factor(data$species)  # if we want to put some colours
-)
 
+### plot classic
+ggplot(plot_4_data, aes(x = linearity, y = steepness)) +
+  geom_point(size = 3, color = "steelblue") +
+  geom_ribbon(data = pred_df, aes(x = linearity, ymin = lower, ymax = upper),
+              fill = "red", alpha = 0.2, inherit.aes = FALSE) +
+  geom_line(data = pred_df, aes(x = linearity, y = mean),
+            color = "red", size = 1.2, inherit.aes = FALSE) +
+  labs(
+    x = "Hierarchy Linearity",
+    y = "Hierarchy Steepness") +
+  theme_bw(base_size = 14) +
+  theme(axis.title = element_text(face = "bold"))
 
 
 ### plot classic
