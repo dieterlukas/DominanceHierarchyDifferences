@@ -1,0 +1,173 @@
+---
+title: "Figure 5"
+author: "Lucas Spicher"
+date: "2026-07-23"
+output: html_document
+---
+```{r}
+library(rethinking)
+library(dplyr)
+library(ape)
+library(geiger)
+library(phytools)
+library(ggplot2)
+library(gridExtra)
+library(grid)
+library(ggtree)
+library(stringr)
+library(tidyverse)
+library(tidytree)
+library(cowplot)
+```
+
+
+```{r}
+# Load the data
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+data <- read.csv("Comparative_primate_steepness_values_clean.csv")
+
+# Integrate the additional variable, on the intersexual dominance relationship, to the dataset (the averaged percentage of fights won by females).
+dominancedata<-read.csv(url("https://github.com/dieterlukas/primate_power/raw/refs/heads/main/data/PopulationData_IntersexDominance.csv"))
+intersex_dominance<-as.data.frame(dominancedata %>% group_by(species=corrected_species_id) %>% summarise(perc_won_females=mean(perc_won_females,na.rm=T)))
+data<-left_join(data,intersex_dominance,by="species")
+# Recover the averaged percentage of fights won by females in dominancedata for Sapajus_apella and and assign it in data for the species Cebus_apella
+dominancedata %>%
+  filter(corrected_species_id == "Sapajus_apella") %>%
+  summarise(mean_perc = mean(perc_won_females, na.rm = TRUE))
+data$perc_won_females[data$species == "Cebus_apella"] <- 33
+# Some species that we have in data do not appear in dominancedata, which produces NA entries. I will delete these lines in section 10). 
+
+data$typeofbehaviour[is.na(data$typeofbehaviour)] <- "AD"
+```
+
+Figure 5A
+Remind the model
+```{r}
+dat_list_steepness_typeofbehaviour <- list(
+  steepness = as.numeric(data$steepness),  
+  typeofbehaviour = as.integer(as.factor(data$typeofbehaviour))
+)
+m_steepness_typeofbehaviour <- ulam(
+  alist(
+    steepness ~ dbeta2(mean,variance),
+    logit(mean) <- b[typeofbehaviour],
+    b[typeofbehaviour] ~dnorm(0,1),
+    variance ~ dexp(10)
+  ) , data=dat_list_steepness_typeofbehaviour , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+# We check the results - we are interested in the effect measured in the factor b, the three values for the three types of behaviour
+precis(m_steepness_typeofbehaviour,depth=2)
+post_steepness_typeofbehaviour<-extract.samples(m_steepness_typeofbehaviour)
+# Comparing D versus A
+contrast_D_A<-post_steepness_typeofbehaviour$b[,3]-post_steepness_typeofbehaviour$b[,1]
+precis(contrast_D_A)
+# No real difference - difference is even smaller when accounting for the effect of sparseness on steepness
+```
+
+
+```{r}
+data$typeofbehaviour <- factor(data$typeofbehaviour, levels = c("A","D","AD"))
+label_map <- c("Aggression", "Signal", "Both") 
+cred_steepness <- (precis(m_steepness_typeofbehaviour,dept=2)[1:3,c(1,3:4)])
+cred_steepness[1,]<-inv_logit(cred_steepness[1,])
+cred_steepness[2,]<-inv_logit(cred_steepness[2,])
+cred_steepness[3,]<-inv_logit(cred_steepness[3,])
+colnames(cred_steepness)<-c("median","lower","upper")
+cred_steepness$typeofbehaviour<-c("A","D","AD")
+
+p_steepness <- ggplot() +
+  geom_jitter(data = data,
+              aes(x = typeofbehaviour, y = steepness, color = typeofbehaviour),
+              width = 0.25, size = 5, alpha = 0.6, stroke = 0) +
+  geom_errorbar(data = cred_steepness,
+                aes(x = typeofbehaviour, ymin = pmax(0, lower), ymax = pmin(1, upper)),
+                width = 0.25, size = 0.5, color = "black") +
+  geom_point(data = cred_steepness,
+             aes(x = typeofbehaviour, y = median),
+             size = 5, shape = 21, fill = "white", color = "black", stroke = 1.2) +
+  scale_color_manual(values = c("#F1BB7B", "#5B1A18", "#FD6467")) +  
+  scale_x_discrete(labels = label_map) +
+  labs(x = NULL, y = "Hierarchy Steepness") +
+  ylim(0, 1) +
+  theme_minimal(base_size = 16) +
+  theme(axis.title = element_text(face = "bold", size = 16),
+        axis.text = element_text(size = 14),
+        legend.position = "none")
+
+print(p_steepness)
+```
+
+Figure 5B
+```{r}
+dat_list_linearity_typeofbehaviour <- list(
+  linearity = as.numeric(data$h_index)-0.001,  
+  typeofbehaviour = as.integer(as.factor(data$typeofbehaviour))
+)
+m_linearity_typeofbehaviour <- ulam(
+  alist(
+    linearity ~ dbeta2(mean,variance),
+    logit(mean) <-b[typeofbehaviour],  
+    b[typeofbehaviour] ~dnorm(0,1),
+    variance ~ dexp(10)
+  ) , data=dat_list_linearity_typeofbehaviour , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+# We check the results - we are interested in the effect measured in the factor b
+precis(m_linearity_typeofbehaviour, depth=2)
+post_linearity_typeofbehaviour<-extract.samples(m_linearity_typeofbehaviour)
+# Comparing D versus A
+contrast_D_A<-post_linearity_typeofbehaviour$b[,3]-post_linearity_typeofbehaviour$b[,1]
+precis(contrast_D_A)
+# No difference
+
+```
+
+```{r}
+cred_linearity <- (precis(m_linearity_typeofbehaviour,dept=2)[1:3,c(1,3:4)])
+cred_linearity[1,]<-inv_logit(cred_linearity[1,])
+cred_linearity[2,]<-inv_logit(cred_linearity[2,])
+cred_linearity[3,]<-inv_logit(cred_linearity[3,])
+colnames(cred_linearity)<-c("median","lower","upper")
+cred_linearity$typeofbehaviour<-c("A","D","AD")
+
+p_linearity <- ggplot() +
+  geom_jitter(data = data,
+              aes(x = typeofbehaviour, y = h_index, color = typeofbehaviour),
+              width = 0.25, size = 5, alpha = 0.6, stroke = 0) +  
+  geom_errorbar(data = cred_linearity,
+                aes(x = typeofbehaviour, ymin = pmax(0, lower), ymax = pmin(1, upper)),
+                width = 0.25,    # plus étroites
+                size = 0.5,      # plus fines
+                color = "black")+
+  geom_point(data = cred_linearity,
+             aes(x = typeofbehaviour, y = median),
+             size = 5, shape = 21, fill = "white", color = "black", stroke = 1.2) +
+  scale_color_manual(values = c("#F1BB7B", "#5B1A18", "#FD6467")) +  
+  scale_x_discrete(labels = label_map) +
+  labs(x = "Type of Interaction", y = "Hierarchy Linearity") +
+  ylim(0, 1.01) +
+  theme_minimal(base_size = 16) +
+  theme(
+    axis.title = element_text(face = "bold", size = 16),
+    axis.text = element_text(size = 14),
+    legend.position = "none",
+    panel.grid.minor = element_blank()
+  )
+
+print(p_linearity)
+```
+
+```{r}
+x.grob <- textGrob("Type of Interaction", gp = gpar(fontsize = 16, fontface = "bold"))
+
+plots <- plot_grid(
+  p_steepness + xlab(NULL),
+  p_linearity + xlab(NULL),
+  labels = c("A", "B"),
+  label_size = 16,
+  label_fontface = "bold",
+  ncol = 2,
+  align = "h"
+)
+
+grid.arrange(plots, bottom = x.grob)
+```
+
+

@@ -1,0 +1,180 @@
+---
+title: "Figure_4"
+author: "Lucas Spicher"
+date: "2026-07-23"
+output: html_document
+---
+
+```{r}
+library(rethinking)
+library(dplyr)
+library(ape)
+library(geiger)
+library(phytools)
+library(ggplot2)
+library(gridExtra)
+library(grid)
+library(ggtree)
+library(stringr)
+library(tidyverse)
+library(tidytree)
+library(cowplot)
+```
+
+```{r}
+# Load the data
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+data <- read.csv("Comparative_primate_steepness_values_clean.csv")
+
+# Integrate the additional variable, on the intersexual dominance relationship, to the dataset (the averaged percentage of fights won by females).
+dominancedata<-read.csv(url("https://github.com/dieterlukas/primate_power/raw/refs/heads/main/data/PopulationData_IntersexDominance.csv"))
+intersex_dominance<-as.data.frame(dominancedata %>% group_by(species=corrected_species_id) %>% summarise(perc_won_females=mean(perc_won_females,na.rm=T)))
+data<-left_join(data,intersex_dominance,by="species")
+# Recover the averaged percentage of fights won by females in dominancedata for Sapajus_apella and and assign it in data for the species Cebus_apella
+dominancedata %>%
+  filter(corrected_species_id == "Sapajus_apella") %>%
+  summarise(mean_perc = mean(perc_won_females, na.rm = TRUE))
+data$perc_won_females[data$species == "Cebus_apella"] <- 33
+# Some species that we have in data do not appear in dominancedata, which produces NA entries. I will delete these lines in section 10). 
+
+# Load the phylogeny and prepare it
+
+specieslist<-as.data.frame(matrix(unique(data$species),ncol=1,nrow=length(unique(data$species))))
+colnames(specieslist)<-"species"
+rownames(specieslist)<-specieslist$species
+
+```
+
+Figure 4A
+```{r}
+height_points <- c("males" = 6, "females" = 7.5)
+cols_sex <- c("males"="gold3", "females"="#443A83FF")
+
+steep_descri <- ggplot(data, aes(x = steepness, color = sex, fill = sex)) +
+  geom_density(size = 2, alpha = 0.3) +
+  geom_jitter(aes(y = height_points[sex]),
+              width = 0, size = 3, alpha = 0.6, shape = 21,
+              fill = "white", stroke = 1.5) +
+  scale_color_manual(values = cols_sex) +
+  scale_fill_manual(values = cols_sex) +
+  labs(x = "Hierarchy Steepness", y = "Density") +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 8)) +
+  theme_minimal(base_size = 16) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title = element_text(face = "bold", size = 16),
+    axis.text = element_text(size = 14),
+    legend.position = "top"
+  )
+
+print(steep_descri)
+```
+
+Figure 4B
+```{r}
+linearity_descri <- ggplot(data, aes(x = h_index, color = sex, fill = sex)) +
+  geom_density(size = 2, alpha = 0.3) +
+  geom_jitter(data = data,
+              aes(y = height_points[sex]),
+              width = 0, size = 3, alpha = 0.6, shape = 21, fill = "white", stroke = 1.5) +
+  scale_color_manual(values = cols_sex) +
+  scale_fill_manual(values = cols_sex) +
+  labs(x = "Hierarchy Linearity", y = "Density") +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 8)) +
+  theme_minimal(base_size = 16) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title = element_text(face = "bold", size = 16),
+    axis.text = element_text(size = 14),
+    legend.position = "top"
+  )
+
+print(linearity_descri)
+```
+
+Figure 4C
+```{r}
+dci_descri <- ggplot(data, aes(x = dci, color = sex, fill = sex)) +
+  geom_density(size = 2, alpha = 0.3) +
+  geom_jitter(data = data,
+              aes(y = height_points[sex]),
+              width = 0, size = 3, alpha = 0.6, shape = 21, fill = "white", stroke = 1.5) +
+  scale_color_manual(values = cols_sex) +
+  scale_fill_manual(values = cols_sex) +
+  labs(x = "DCI", y = "Density") +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 8)) +
+  theme_minimal(base_size = 16) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title = element_text(face = "bold", size = 16),
+    axis.text = element_text(size = 14),
+    legend.position = "top"
+  )
+
+print(dci_descri)
+```
+
+
+```{r}
+p1 <- steep_descri + theme(legend.position = "none")
+p2 <- linearity_descri + theme(legend.position = "none")
+p3 <- dci_descri + theme(legend.position = "none")
+
+#legend
+legend_top <- get_legend(
+  steep_descri +
+    guides(
+      color = guide_legend(
+        nrow = 1,
+        override.aes = list(
+          shape = 21,
+          size = 4,
+          fill = "white",
+          alpha = 1,
+          stroke = 1.5,
+          linetype = 0
+        )
+      ),
+      fill = "none"
+    ) +
+    theme(
+      legend.position = "top",
+      legend.direction = "horizontal",
+      legend.title = element_blank(),
+      legend.box = "horizontal"
+    )
+)
+
+
+#vertical
+plots_col <- plot_grid(
+  p1, p2, p3,
+  ncol = 1,
+  align = "v",
+  labels = c("A", "B", "C"),
+  label_size = 16,
+  label_fontface = "bold"
+)
+
+final_plot <- plot_grid(
+  legend_top,
+  plots_col,
+  ncol = 1,
+  rel_heights = c(0.12, 1)
+)
+
+final_plot
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

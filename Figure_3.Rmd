@@ -1,0 +1,305 @@
+---
+title: "Figure 3"
+author: "Lucas Spicher"
+date: "2026-07-22"
+output: html_document
+---
+```{r}
+library(rethinking)
+library(dplyr)
+library(ape)
+library(geiger)
+library(phytools)
+library(ggplot2)
+library(gridExtra)
+library(grid)
+library(ggtree)
+library(stringr)
+library(tidyverse)
+library(tidytree)
+library(cowplot)
+```
+
+
+```{r}
+# Load the data
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+data <- read.csv("Comparative_primate_steepness_values_clean.csv")
+
+# Integrate the additional variable, on the intersexual dominance relationship, to the dataset (the averaged percentage of fights won by females).
+dominancedata<-read.csv(url("https://github.com/dieterlukas/primate_power/raw/refs/heads/main/data/PopulationData_IntersexDominance.csv"))
+intersex_dominance<-as.data.frame(dominancedata %>% group_by(species=corrected_species_id) %>% summarise(perc_won_females=mean(perc_won_females,na.rm=T)))
+data<-left_join(data,intersex_dominance,by="species")
+# Recover the averaged percentage of fights won by females in dominancedata for Sapajus_apella and and assign it in data for the species Cebus_apella
+dominancedata %>%
+  filter(corrected_species_id == "Sapajus_apella") %>%
+  summarise(mean_perc = mean(perc_won_females, na.rm = TRUE))
+data$perc_won_females[data$species == "Cebus_apella"] <- 33
+# Some species that we have in data do not appear in dominancedata, which produces NA entries. I will delete these lines in section 10). 
+```
+
+Load the phylogeny
+```{r}
+specieslist<-as.data.frame(matrix(unique(data$species),ncol=1,nrow=length(unique(data$species))))
+colnames(specieslist)<-"species"
+rownames(specieslist)<-specieslist$species
+
+# Load the phylogeny
+phylogeny <- read.nexus("Upham2019MammalPhylogeny.nex")
+
+# check whether the species in our data are the same as the species in the phylogeny
+speciesmatching<-name.check(phylogeny,specieslist)
+# check which species from our data are not in the phylogeny
+speciesmatching$data_not_tree
+
+specieslist<-as.data.frame(matrix(unique(data$species),ncol=1,nrow=length(unique(data$species))))
+colnames(specieslist)<-"species"
+rownames(specieslist)<-specieslist$species
+
+# and reduce the phylogeny to only include the species for which we have data
+speciesmatching<-name.check(phylogeny,specieslist)
+mtree<-drop.tip(phylogeny,speciesmatching$tree_not_data)
+
+```
+
+
+
+Figure 3A
+Remind the model
+```{r}
+mdata_phylogeny_steepness_linearity <- list(
+  steepness=data$steepness,
+  linearity=data$h_index,
+  sparseness=data$sparseness,
+  dci=data$dci,
+  species=as.integer(as.factor(data$species)),
+  N_spp=length(unique(data$species))
+)
+
+Dmat<-cophenetic(mtree)
+mdata_phylogeny_steepness_linearity$Dmat<-Dmat/max(Dmat)
+colnames(mdata_phylogeny_steepness_linearity$Dmat)<-as.integer(as.factor(colnames(mdata_phylogeny_steepness_linearity$Dmat)))
+rownames(mdata_phylogeny_steepness_linearity$Dmat)<-as.integer(as.factor(rownames(mdata_phylogeny_steepness_linearity$Dmat)))
+
+m_steepness_linearity <- ulam(
+  alist(
+    steepness ~ dbeta2(mean,variance),
+    logit(mean) <-a+b[species]+c*sparseness+d*linearity,
+    a ~dnorm(0,1),
+    c~dnorm(0,1),
+    d~dnorm(0,1),
+    vector[N_spp]:b~multi_normal(0,SIGMA),
+    matrix[N_spp,N_spp]:SIGMA <- cov_GPL2( Dmat , etasq, rhosq , 0.01 ),
+    etasq ~ half_normal(1,0.25),
+    rhosq ~ half_normal(3,0.25),
+    variance~dexp(10)
+  ) , data=mdata_phylogeny_steepness_linearity , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+
+precis(m_steepness_linearity)
+plot(data$steepness~data$h_index)
+# Linearity and steepness are positively correlated
+```
+
+```{r}
+plot_4_data <- data.frame(
+  steepness = mdata_phylogeny_steepness_linearity$steepness,
+  linearity = mdata_phylogeny_steepness_linearity$linearity,
+  dci = mdata_phylogeny_steepness_linearity$dci,
+  species = factor(data$species))  # if we want to put some colours
+
+plot_4_data$clade <- dplyr::case_when(
+  plot_4_data$species %in% c("Cebus_capucinus", "Saimiri_sciureus", "Alouatta_palliata") ~ "Platyrrhini",
+  plot_4_data$species %in% c("Pan_paniscus", "Pan_troglodytes", "Gorilla_gorilla", "Gorilla_beringei") ~ "Hominoidea",
+  TRUE ~ "Cercopithecoidea"
+)
+
+
+#posterior
+post <- extract.samples(m_steepness_linearity)
+
+#smooth curve
+linearity_seq <- seq(min(plot_4_data$linearity), max(plot_4_data$linearity), length.out = 100)
+
+#predictions
+preds <- sapply(1:length(post$a), function(i) {
+  plogis(post$a[i] + post$d[i] * linearity_seq)  # steepness sur logit scale
+})
+
+#mean and CI
+pred_df <- data.frame(
+  linearity = linearity_seq,
+  mean = rowMeans(preds),
+  lower = apply(preds, 1, quantile, 0.055),
+  upper = apply(preds, 1, quantile, 0.945)
+)
+
+```
+
+```{r}
+steep_lin<-ggplot(plot_4_data, aes(x = linearity, y = steepness, color = clade)) +
+  
+  geom_ribbon(data = pred_df,
+              aes(x = linearity, ymin = lower, ymax = upper),
+              fill = "#fcbba1", alpha = 0.20, inherit.aes = FALSE) +
+  
+  geom_line(data = pred_df,
+            aes(x = linearity, y = mean),
+            color = "#d73027", size = 1.2, inherit.aes = FALSE) +
+  
+  geom_point(size = 3, stroke = 0.4,
+             position = position_jitter(width = 0.0001, height = 0)) +
+  
+  scale_color_manual(values = c(
+    Platyrrhini      = "#8da0cb", 
+    Hominoidea       = "#fc8d62",    
+    Cercopithecoidea = "#66c2a5"     
+  )) +
+  
+  labs(x = "Hierarchy Linearity", 
+       y = "Hierarchy Steepness",
+       color = NULL) +
+  
+  theme_light(base_size = 14) +
+  theme(
+    panel.grid.major   = element_line(color = "grey85"),
+    panel.grid.minor   = element_blank(),
+    axis.title         = element_text(face = "bold"),
+    legend.position    = c(0.02, 0.02),
+    legend.justification = c(0, 0),
+    legend.background  = element_rect(fill = alpha("white", 0.9), color = NA),
+    legend.text        = element_text(size = 10)
+  )
+
+print(steep_lin)
+
+```
+
+Figure 3B
+```{r}
+m_steepness_dci<- ulam(
+  alist(
+    steepness ~ dbeta2(mean,variance),
+    logit(mean) <-a+b[species]+c*sparseness+d*dci,
+    a ~dnorm(0,1),
+    c~dnorm(0,1),
+    d~dnorm(0,1),
+    vector[N_spp]:b~multi_normal(0,SIGMA),
+    matrix[N_spp,N_spp]:SIGMA <- cov_GPL2( Dmat , etasq, rhosq , 0.01 ),
+    etasq ~ half_normal(1,0.25),
+    rhosq ~ half_normal(3,0.25),
+    variance~dexp(10)
+  ) , data=mdata_phylogeny_steepness_linearity , chains=4 , cores=4 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+
+precis(m_steepness_dci)
+plot(data$steepness~data$dci)
+```
+
+```{r}
+post_dci_steepness <- extract.samples(m_steepness_dci)
+
+#smooth curve
+dci_seq <- seq(min(plot_4_data$dci), max(plot_4_data$dci), length.out = 100)
+
+#predictions
+preds <- sapply(1:length(post$a), function(i) {
+  plogis(post$a[i] + post$d[i] * dci_seq)  # steepness sur logit scale
+})
+
+#mean and CI
+pred_df_dci <- data.frame(
+  dci = dci_seq,
+  mean = rowMeans(preds),
+  lower = apply(preds, 1, quantile, 0.055),
+  upper = apply(preds, 1, quantile, 0.945)
+)
+```
+
+```{r}
+steep_dci<-ggplot(plot_4_data, aes(x = dci, y = steepness, color = clade)) +
+  
+  geom_ribbon(data = pred_df_dci,
+              aes(x = dci, ymin = lower, ymax = upper),
+              fill = "#fcbba1", alpha = 0.20, inherit.aes = FALSE) +
+  
+  geom_line(data = pred_df_dci,
+            aes(x = dci, y = mean),
+            color = "#d73027", size = 1.2, inherit.aes = FALSE) +
+  
+  geom_point(size = 3, stroke = 0.4,
+             position = position_jitter(width = 0.01, height = 0)) +
+  
+  scale_color_manual(values = c(
+    Platyrrhini      = "#8da0cb", 
+    Hominoidea       = "#fc8d62",    
+    Cercopithecoidea = "#66c2a5"     
+  )) +
+  
+  labs(x = "DCI", 
+       y = "Hierarchy Steepness",
+       color = NULL) +
+  
+  theme_bw(base_size = 14) +
+  theme(
+    panel.grid.major   = element_line(color = "grey85"),
+    panel.grid.minor   = element_blank(),
+    axis.title         = element_text(face = "bold"),
+    legend.position    = c(0.02, 0.05),
+    legend.justification = c(0, 0),
+    legend.background  = element_rect(fill = alpha("white", 0.9), color = NA),
+    legend.text        = element_text(size = 10)
+  )
+
+print(steep_dci)
+```
+
+
+Merge them to create Figure 3
+```{r}
+p1 <- steep_lin + theme(legend.position = "none")
+p2 <- steep_dci + theme(legend.position = "none")
+
+# legend plot
+leg_plot <- get_legend(
+  steep_lin +
+    guides(color = guide_legend(override.aes = list(shape = 16, size = 3, alpha = 1))) +
+    theme(
+      legend.position = "top",
+      legend.direction = "horizontal",
+      legend.title = element_blank(),
+      legend.box = "horizontal",
+      legend.justification = "center"
+    )
+)
+
+legend_only <- ggdraw() +
+  draw_grob(leg_plot, x = 0.5, y = 0.5, hjust = 0.5, vjust = 0.5)
+
+plots_col <- plot_grid(
+  p1, p2,
+  ncol = 1,
+  align = "v",
+  labels = c("A", "B"),
+  label_size = 16,
+  label_fontface = "bold"
+)
+
+final_plot <- plot_grid(
+  legend_only,
+  plots_col,
+  ncol = 1,
+  rel_heights = c(0.14, 1)
+)
+
+final_plot
+
+```
+
+
+
+
+
+
+
+
+
+
