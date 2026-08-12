@@ -119,10 +119,11 @@ post <- extract.samples(m_steepness_linearity)
 
 #smooth curve
 linearity_seq <- seq(min(plot_4_data$linearity), max(plot_4_data$linearity), length.out = 100)
+m_sparseness <-  mean(data$sparseness)
 
 #predictions
 preds <- sapply(1:length(post$a), function(i) {
-  plogis(post$a[i] + post$d[i] * linearity_seq)  # steepness sur logit scale
+  plogis(post$a[i] + post$d[i] * linearity_seq + post$c[i] * m_sparseness)  # steepness sur logit scale
 })
 
 #mean and CI
@@ -201,16 +202,16 @@ post_dci_steepness <- extract.samples(m_steepness_dci)
 dci_seq <- seq(min(plot_4_data$dci), max(plot_4_data$dci), length.out = 100)
 
 #predictions
-preds <- sapply(1:length(post$a), function(i) {
-  plogis(post$a[i] + post$d[i] * dci_seq)  # steepness sur logit scale
+preds_dci <- sapply(1:length(post$a), function(i) {
+  plogis(post_dci_steepness$a[i] + post_dci_steepness$d[i] * dci_seq + post_dci_steepness$c[i] * m_sparseness)  # steepness sur logit scale
 })
 
 #mean and CI
 pred_df_dci <- data.frame(
   dci = dci_seq,
-  mean = rowMeans(preds),
-  lower = apply(preds, 1, quantile, 0.055),
-  upper = apply(preds, 1, quantile, 0.945)
+  mean = rowMeans(preds_dci),
+  lower = apply(preds_dci, 1, quantile, 0.055),
+  upper = apply(preds_dci, 1, quantile, 0.945)
 )
 ```
 
@@ -293,6 +294,14 @@ final_plot <- plot_grid(
 final_plot
 
 ```
+
+
+
+
+
+
+
+
 
 
 
