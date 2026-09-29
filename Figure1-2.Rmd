@@ -19,7 +19,6 @@ library(grid)
 library(gridExtra)
 library(cowplot)
 library(tidyr)
-
 ```
 
 Load the data
@@ -35,28 +34,53 @@ data_alt <- data %>%
     n_studies = n())
 ```
 
-Load the phylogeny and prepare it
+
+
+
+
 ```{r}
-specieslist<-as.data.frame(matrix(unique(data$species),ncol=1,nrow=length(unique(data$species))))
-colnames(specieslist)<-"species"
-rownames(specieslist)<-specieslist$species
+# -------------------------------------------------------------------------
+# Prepare data and phylogeny for Figure 1
+# -------------------------------------------------------------------------
+
+# Create a copy of the dataset for the figure.
+# The original dataset (data) is kept unchanged for traceability.
+data_fig1 <- data %>%
+  mutate(
+    species = recode(
+      species,
+      "Cebus_apella" = "Sapajus_apella"
+    )
+  )
 
 # Load the phylogeny
 phylogeny <- read.nexus("Upham2019MammalPhylogeny.nex")
 
-# check whether the species in our data are the same as the species in the phylogeny
-speciesmatching<-name.check(phylogeny,specieslist)
-# check which species from our data are not in the phylogeny
+# Update the taxonomic name in the phylogeny
+# Cebus apella -> Sapajus apella
+phylogeny$tip.label[
+  phylogeny$tip.label == "Cebus_apella"
+] <- "Sapajus_apella"
+
+# Species list corresponding to the harmonised names used in Figure 1
+specieslist <- data.frame(
+  species = unique(data_fig1$species),
+  row.names = unique(data_fig1$species)
+)
+
+# Check whether the species in our data are present in the phylogeny
+speciesmatching <- name.check(phylogeny, specieslist)
+
+# Species present in the data but absent from the phylogeny
 speciesmatching$data_not_tree
 
-specieslist<-as.data.frame(matrix(unique(data$species),ncol=1,nrow=length(unique(data$species))))
-colnames(specieslist)<-"species"
-rownames(specieslist)<-specieslist$species
-
-# and reduce the phylogeny to only include the species for which we have data
-speciesmatching<-name.check(phylogeny,specieslist)
-mtree<-drop.tip(phylogeny,speciesmatching$tree_not_data)
+# Reduce the phylogeny to the species included in our dataset
+mtree <- drop.tip(
+  phylogeny,
+  speciesmatching$tree_not_data
+)
 ```
+
 
 ---------------------------
 TREE - FIGURE 1
@@ -64,7 +88,7 @@ TREE - FIGURE 1
 
 ```{r}
 # Number of matrices per species (for tip point size)
-data_N <- data %>%
+data_N <- data_fig1 %>%
   group_by(species) %>%
   summarise(Nmatrices = n(), .groups = "drop") %>%
   mutate(
@@ -73,27 +97,25 @@ data_N <- data %>%
   )
 
 # Average steepness per species and sex (wide format)
-data_steep_wide <- data %>%
+data_steep_wide <- data_fig1 %>%
   group_by(species, sex) %>%
-  summarise(mean_steepness = mean(steepness, na.rm = TRUE), .groups = "drop") %>%
-  mutate(sex = recode(sex,
-                      "M" = "males", "F" = "females",
-                      "male" = "males", "female" = "females")) %>%
-  pivot_wider(names_from = sex, values_from = mean_steepness)
-```
-
-
-```{r}
-# --- Phylogeny ----------------------------------------------------------------
-specieslist <- data.frame(
-  species = unique(data$species),
-  row.names = unique(data$species)
-)
-
-phylogeny <- read.nexus("Upham2019MammalPhylogeny.nex")
-speciesmatching <- name.check(phylogeny, specieslist)
-mtree <- drop.tip(phylogeny, speciesmatching$tree_not_data)
-
+  summarise(
+    mean_steepness = mean(steepness, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    sex = recode(
+      sex,
+      "M" = "males",
+      "F" = "females",
+      "male" = "males",
+      "female" = "females"
+    )
+  ) %>%
+  pivot_wider(
+    names_from = sex,
+    values_from = mean_steepness
+  )
 ```
 
 
@@ -300,7 +322,6 @@ theme(
 
 p_final
 ```
-
 --------------------
 Figure 2
 --------------------
