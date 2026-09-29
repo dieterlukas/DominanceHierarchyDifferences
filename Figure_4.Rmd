@@ -64,7 +64,7 @@ mtree<-drop.tip(phylogeny,speciesmatching$tree_not_data)
 
 
 
-Figure 3A
+Figure 4A
 Remind the model
 ```{r}
 mdata_phylogeny_steepness_linearity <- list(
@@ -156,15 +156,15 @@ steep_lin<-ggplot(plot_4_data, aes(x = linearity, y = steepness, color = clade))
     Cercopithecoidea = "#66c2a5"     
   )) +
   
-  labs(x = "Hierarchy Linearity", 
-       y = "Hierarchy Steepness",
+  labs(x = "Linearity", 
+       y = "Steepness",
        color = NULL) +
   
   theme_light(base_size = 14) +
   theme(
     panel.grid.major   = element_line(color = "grey85"),
     panel.grid.minor   = element_blank(),
-    axis.title         = element_text(face = "bold"),
+    axis.title         = element_text(face = "bold", size = 11),
     legend.position    = c(0.02, 0.02),
     legend.justification = c(0, 0),
     legend.background  = element_rect(fill = alpha("white", 0.9), color = NA),
@@ -175,7 +175,7 @@ print(steep_lin)
 
 ```
 
-Figure 3B
+Figure 4B
 ```{r}
 m_steepness_dci<- ulam(
   alist(
@@ -236,14 +236,14 @@ steep_dci<-ggplot(plot_4_data, aes(x = dci, y = steepness, color = clade)) +
   )) +
   
   labs(x = "DCI", 
-       y = "Hierarchy Steepness",
+       y = "Steepness",
        color = NULL) +
   
   theme_bw(base_size = 14) +
   theme(
     panel.grid.major   = element_line(color = "grey85"),
     panel.grid.minor   = element_blank(),
-    axis.title         = element_text(face = "bold"),
+    axis.title         = element_text(face = "bold", size = 11),
     legend.position    = c(0.02, 0.05),
     legend.justification = c(0, 0),
     legend.background  = element_rect(fill = alpha("white", 0.9), color = NA),
@@ -254,10 +254,138 @@ print(steep_dci)
 ```
 
 
+Figure 4C
+```{r}
+m_dci_linearity <- ulam(
+  alist(
+    dci ~ dbeta2(mean,variance),
+    logit(mean) <-a+b[species]+c*linearity,
+    a ~dnorm(0,1),
+    c~dnorm(0,1),
+    vector[N_spp]:b~multi_normal(0,SIGMA),
+    matrix[N_spp,N_spp]:SIGMA <- cov_GPL2( Dmat , etasq, rhosq , 0.01 ),
+    etasq ~ half_normal(1,0.25),
+    rhosq ~ half_normal(3,0.25),
+    variance~dexp(10)
+  ) , data=mdata_phylogeny_steepness_linearity , chains=4 , cores=8 , log_lik=TRUE , cmdstan=T, messages=FALSE, refresh=0)
+
+precis(m_dci_linearity)
+plot(data$dci~data$h_index)
+```
+
+
+```{r}
+# Posterior samples
+post_dci_lin <- extract.samples(m_dci_linearity)
+
+# Sequence of linearity values for prediction
+linearity_seq <- seq(
+  min(mdata_phylogeny_steepness_linearity$linearity, na.rm = TRUE),
+  max(mdata_phylogeny_steepness_linearity$linearity, na.rm = TRUE),
+  length.out = 100
+)
+
+# Posterior predictions
+preds_lin_dci <- sapply(
+  seq_along(post_dci_lin$a),
+  function(i) {
+    plogis(
+      post_dci_lin$a[i] +
+      post_dci_lin$c[i] * linearity_seq
+    )
+  }
+)
+
+# Mean and 89% credible interval
+pred_df_dci <- data.frame(
+  linearity = linearity_seq,
+  mean = rowMeans(preds_lin_dci),
+  lower = apply(preds_lin_dci, 1, quantile, probs = 0.055),
+  upper = apply(preds_lin_dci, 1, quantile, probs = 0.945)
+)
+```
+
+```{r}
+linearity_dci <- ggplot(
+  plot_4_data,
+  aes(x = linearity, y = dci, color = clade)
+) +
+  
+  # Intervalle crédible
+  geom_ribbon(
+    data = pred_df_dci,
+    aes(
+      x = linearity,
+      ymin = lower,
+      ymax = upper
+    ),
+    fill = "#fcbba1",
+    alpha = 0.20,
+    inherit.aes = FALSE
+  ) +
+  
+  # Moyenne postérieure
+  geom_line(
+    data = pred_df_dci,
+    aes(
+      x = linearity,
+      y = mean
+    ),
+    color = "#d73027",
+    linewidth = 1.2,
+    inherit.aes = FALSE
+  ) +
+  
+  # Données observées
+  geom_point(
+    size = 3,
+    stroke = 0.4,
+    position = position_jitter(
+      width = 0.01,
+      height = 0
+    )
+  ) +
+  
+  scale_color_manual(
+    values = c(
+      Platyrrhini      = "#8da0cb",
+      Hominoidea       = "#fc8d62",
+      Cercopithecoidea = "#66c2a5"
+    )
+  ) +
+  
+  labs(
+    x = "Linearity",
+    y = "DCI",
+    color = NULL
+  ) +
+  
+  theme_bw(base_size = 14) +
+  theme(
+    panel.grid.major = element_line(color = "grey85"),
+    panel.grid.minor = element_blank(),
+    axis.title = element_text(face = "bold", size = 11),
+    legend.position = c(0.02, 0.05),
+    legend.justification = c(0, 0),
+    legend.background = element_rect(
+      fill = alpha("white", 0.9),
+      color = NA
+    ),
+    legend.text = element_text(size = 10)
+  )
+
+print(linearity_dci)
+```
+
+
+
+
+
 Merge them to create Figure 3
 ```{r}
 p1 <- steep_lin + theme(legend.position = "none")
 p2 <- steep_dci + theme(legend.position = "none")
+p3 <- linearity_dci + theme(legend.position = "none")
 
 # legend plot
 leg_plot <- get_legend(
@@ -276,10 +404,10 @@ legend_only <- ggdraw() +
   draw_grob(leg_plot, x = 0.5, y = 0.5, hjust = 0.5, vjust = 0.5)
 
 plots_col <- plot_grid(
-  p1, p2,
+  p1, p2, p3,
   ncol = 1,
   align = "v",
-  labels = c("A", "B"),
+  labels = c("A", "B", "C"),
   label_size = 16,
   label_fontface = "bold"
 )
@@ -294,21 +422,3 @@ final_plot <- plot_grid(
 final_plot
 
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
