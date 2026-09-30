@@ -1,0 +1,230 @@
+---
+title: "Figure 1 and 2"
+author: "Lucas Spicher"
+date: "2026-07-21"
+output: html_document
+---
+
+We first load the required packages
+```{r}
+library(ggtree)
+library(ggplot2)
+library(dplyr)
+library(stringr)
+library(tidytree)
+library(ape)
+library(geiger)
+library(phytools)
+library(grid)
+library(gridExtra)
+library(cowplot)
+library(tidyr)
+
+```
+
+Load the data
+```{r}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+data <- read.csv("Comparative_primate_steepness_values_clean.csv")
+
+#and prepare it
+data_alt <- data %>%
+  group_by(species, sex) %>%
+  summarise(
+    mean_steepness = mean(steepness, na.rm = TRUE),
+    n_studies = n())
+```
+
+Load the phylogeny and prepare it
+```{r}
+specieslist<-as.data.frame(matrix(unique(data$species),ncol=1,nrow=length(unique(data$species))))
+colnames(specieslist)<-"species"
+rownames(specieslist)<-specieslist$species
+
+# Load the phylogeny
+phylogeny <- read.nexus("Upham2019MammalPhylogeny.nex")
+
+# check whether the species in our data are the same as the species in the phylogeny
+speciesmatching<-name.check(phylogeny,specieslist)
+# check which species from our data are not in the phylogeny
+speciesmatching$data_not_tree
+
+specieslist<-as.data.frame(matrix(unique(data$species),ncol=1,nrow=length(unique(data$species))))
+colnames(specieslist)<-"species"
+rownames(specieslist)<-specieslist$species
+
+# and reduce the phylogeny to only include the species for which we have data
+speciesmatching<-name.check(phylogeny,specieslist)
+mtree<-drop.tip(phylogeny,speciesmatching$tree_not_data)
+```
+
+--------------------
+Figure 2
+--------------------
+1. Stats by clade (males and females)
+```{r}
+data$clade <- case_when(
+  data$species %in% c("Pan_troglodytes", "Pan_paniscus", "Gorilla_beringei", "Gorilla_gorilla") ~ "Hominoidea",
+  data$species %in% c("Cebus_capucinus", "Cebus_apella", "Saimiri_sciureus", "Alouatta_palliata") ~ "Platyrrhini",
+  TRUE ~ "Cercopithecoidea" 
+)
+
+data2 <- data %>%
+  mutate(
+    steepness = as.numeric(as.character(steepness)),
+    h_index = as.numeric(as.character(h_index)),
+    dci = as.numeric(as.character(dci))
+  )
+
+clade_stats <- data2 %>%
+  group_by(clade) %>%
+  summarise(
+    N_matrices = n(),
+    N_species = n_distinct(species),
+    
+    median_steepness = round(median(steepness, na.rm = TRUE), 3),
+    mean_steepness = round(mean(steepness, na.rm = TRUE), 3),
+    ci_lower_steep = round(quantile(steepness, 0.10, na.rm = TRUE), 3),
+    ci_upper_steep = round(quantile(steepness, 0.90, na.rm = TRUE), 3),
+    
+    median_linearity = round(median(h_index, na.rm = TRUE), 3),
+    mean_linearity = round(mean(h_index, na.rm = TRUE), 3),
+    ci_lower_lin = round(quantile(h_index, 0.10, na.rm = TRUE), 3),
+    ci_upper_lin = round(quantile(h_index, 0.90, na.rm = TRUE), 3),
+    
+    # DCI
+    median_dci = round(median(dci, na.rm=T), 3),
+    mean_dci= round(mean(dci, na.rm=T), 3),
+    ci_lower_steep = round(quantile(dci, 0.10, na.rm=T), 3),
+    ci_upper_steep = round(quantile(dci, 0.90, na.rm=T), 3),
+    
+    .groups = "drop"
+  )
+print(clade_stats)
+
+label_map <- c("Cercopithecoidea" = "Cercopithecoidea", 
+               "Hominoidea" = "Hominoidea", 
+               "Platyrrhini" = "Platyrrhini")
+
+
+```
+
+
+plot steepness 
+```{r}
+p_clades_steep_med <- ggplot() +
+  geom_jitter(data = data2,
+              aes(x = clade, y = steepness, color = clade),
+              width = 0.25, size = 5, alpha = 0.6, stroke = 0) +
+  # Errorbar CI médiane
+  geom_errorbar(data = clade_stats,
+                aes(x = clade, ymin = ci_lower_steep, ymax = ci_upper_steep),
+                width = 0.25, size = 0.5, color = "black") +
+  # Point médiane
+  geom_point(data = clade_stats,
+             aes(x = clade, y = median_steepness),
+             size = 5, shape = 21, fill = "white", color = "black", stroke = 2) +
+  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#8da0cb")) + 
+  scale_x_discrete(labels = label_map) +
+  labs(x = NULL, y = "Hierarchy Steepness") +
+  ylim(0, 1) +
+  theme_minimal(base_size = 16) +
+  theme(axis.title = element_text(face = "bold", size = 16),
+        axis.text = element_text(size = 10),
+        legend.position = "none")
+
+print(p_clades_steep_med)
+```
+
+```{r}
+p_clades_lin_med <- ggplot() +
+  geom_jitter(data = data2,
+              aes(x = clade, y = h_index, color = clade),
+              width = 0.25, size = 5, alpha = 0.6, stroke = 0) +
+  # Errorbar CI médiane
+  geom_errorbar(data = clade_stats,
+                aes(x = clade, ymin = ci_lower_lin, ymax = ci_upper_lin),
+                width = 0.25, size = 0.5, color = "black") +
+  # Point médiane
+  geom_point(data = clade_stats,
+             aes(x = clade, y = median_linearity),
+             size = 5, shape = 21, fill = "white", color = "black", stroke = 2) +
+  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#8da0cb")) + 
+  labs(x = "Clade", y = "Hierarchy Linearity") +
+  ylim(0, 1) +
+  theme_minimal(base_size = 16) +
+  theme(
+    axis.title = element_text(face = "bold", size = 16),
+    axis.text = element_text(size = 10),
+    legend.position = "none",
+    panel.grid.minor = element_blank()
+  )
+
+print(p_clades_lin_med)
+```
+
+```{r}
+p_clades_dci_med <- ggplot() +
+  geom_jitter(data = data2,
+              aes(x = clade, y = dci, color = clade),
+              width = 0.25, size = 5, alpha = 0.6, stroke = 0) +
+  # Errorbar CI médiane
+  geom_errorbar(data = clade_stats,
+                aes(x = clade, ymin = ci_lower_steep, ymax = ci_upper_steep),
+                width = 0.25, size = 0.5, color = "black") +
+  # Point médiane
+  geom_point(data = clade_stats,
+             aes(x = clade, y = median_dci),
+             size = 5, shape = 21, fill = "white", color = "black", stroke = 2) +
+  scale_color_manual(values = c("#66c2a5", "#fc8d62", "#8da0cb")) + 
+  scale_x_discrete(labels = label_map) +
+  labs(x = NULL, y = "DCI") +
+  ylim(0, 1.01) +
+  theme_minimal(base_size = 16) +
+  theme(axis.title = element_text(face = "bold", size = 16),
+        axis.text = element_text(size = 10),
+        legend.position = "none")
+
+print(p_clades_dci_med)
+```
+
+Merge them
+```{r}
+figure2_horizontal <- ggdraw() +
+  draw_plot(
+    plot_grid(
+      p_clades_steep_med + xlab(NULL),
+      p_clades_lin_med + xlab(NULL),
+      p_clades_dci_med + xlab(NULL),
+      labels = c("A", "B", "C"),
+      label_size = 16,
+      label_fontface = "bold",
+      ncol = 3,
+      align = "hv"
+    ),
+    x = 0, y = 0.05, width = 1, height = 0.95
+  ) +
+  draw_label("Clade", x = 0.5, y = 0.03, fontface = "bold", size = 16)
+
+figure2_horizontal
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

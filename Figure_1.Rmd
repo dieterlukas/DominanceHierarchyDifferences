@@ -1,0 +1,328 @@
+---
+title: "Figure 1 (Tree)"
+author: "Lucas Spicher"
+date: "2026-09-29"
+output: html_document
+---
+
+
+We first load the required packages
+```{r}
+library(ggtree)
+library(ggplot2)
+library(dplyr)
+library(stringr)
+library(tidytree)
+library(ape)
+library(geiger)
+library(phytools)
+library(grid)
+library(gridExtra)
+library(cowplot)
+library(tidyr)
+```
+
+Load the data
+```{r}
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+data <- read.csv("Comparative_primate_steepness_values_clean.csv")
+
+#and prepare it
+data_alt <- data %>%
+  group_by(species, sex) %>%
+  summarise(
+    mean_steepness = mean(steepness, na.rm = TRUE),
+    n_studies = n())
+```
+
+
+
+
+
+```{r}
+# -------------------------------------------------------------------------
+# Prepare data and phylogeny for Figure 1
+# -------------------------------------------------------------------------
+
+# Create a copy of the dataset for the figure.
+# The original dataset (data) is kept unchanged for traceability.
+data_fig1 <- data %>%
+  mutate(
+    species = recode(
+      species,
+      "Cebus_apella" = "Sapajus_apella"
+    )
+  )
+
+# Load the phylogeny
+phylogeny <- read.nexus("Upham2019MammalPhylogeny.nex")
+
+# Update the taxonomic name in the phylogeny
+# Cebus apella -> Sapajus apella
+phylogeny$tip.label[
+  phylogeny$tip.label == "Cebus_apella"
+] <- "Sapajus_apella"
+
+# Species list corresponding to the harmonised names used in Figure 1
+specieslist <- data.frame(
+  species = unique(data_fig1$species),
+  row.names = unique(data_fig1$species)
+)
+
+# Check whether the species in our data are present in the phylogeny
+speciesmatching <- name.check(phylogeny, specieslist)
+
+# Species present in the data but absent from the phylogeny
+speciesmatching$data_not_tree
+
+# Reduce the phylogeny to the species included in our dataset
+mtree <- drop.tip(
+  phylogeny,
+  speciesmatching$tree_not_data
+)
+```
+
+
+---------------------------
+TREE - FIGURE 1
+---------------------------
+
+```{r}
+# Number of matrices per species (for tip point size)
+data_N <- data_fig1 %>%
+  group_by(species) %>%
+  summarise(Nmatrices = n(), .groups = "drop") %>%
+  mutate(
+    species_label = str_replace_all(species, "_", " "),
+    species_label = str_to_sentence(species_label)
+  )
+
+# Average steepness per species and sex (wide format)
+data_steep_wide <- data_fig1 %>%
+  group_by(species, sex) %>%
+  summarise(
+    mean_steepness = mean(steepness, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    sex = recode(
+      sex,
+      "M" = "males",
+      "F" = "females",
+      "male" = "males",
+      "female" = "females"
+    )
+  ) %>%
+  pivot_wider(
+    names_from = sex,
+    values_from = mean_steepness
+  )
+```
+
+
+```{r}
+# --- Base tree ----------------------------------------------------------------
+p <- ggtree(mtree) + theme_tree()
+p2 <- p %<+% data_N
+
+# Vertical stretching for readability
+p2$data$y <- p2$data$y * 2
+
+# --- Tip positions ------------------------------------------------------------
+tip_positions <- p2$data %>%
+  filter(isTip) %>%
+  select(label, x, y) %>%
+  rename(species = label)
+
+tree_max_x <- max(tip_positions$x)
+
+# --- Steepness gauge positioning ----------------------------------------------
+x_axis_start_F <- tree_max_x + 28   # females axis (left)
+x_axis_start_M <- tree_max_x + 42   # males axis (right)
+axis_length     <- 8                 # visual length representing 0 to 1
+
+axis_data <- data_steep_wide %>%
+  left_join(tip_positions, by = "species") %>%
+  mutate(
+    # Female axis
+    seg_F_x    = x_axis_start_F,
+    seg_F_xend = x_axis_start_F + axis_length,
+    pt_F_x     = x_axis_start_F + females * axis_length,
+    label_F_x  = x_axis_start_F + axis_length + 0.8,
+    # Male axis
+    seg_M_x    = x_axis_start_M,
+    seg_M_xend = x_axis_start_M + axis_length,
+    pt_M_x     = x_axis_start_M + males * axis_length,
+    label_M_x  = x_axis_start_M + axis_length + 0.8
+  )
+
+# Y positions for tick labels (top of each axis = species with highest y)
+y_tick_F <- axis_data %>% filter(!is.na(females)) %>% slice_max(y, n = 1) %>% pull(y)
+y_tick_M <- axis_data %>% filter(!is.na(males))   %>% slice_max(y, n = 1) %>% pull(y)
+
+# Dummy data for clade legend
+clade_legend <- data.frame(
+  clade = factor(c("Platyrrhini", "Cercopithecoidea", "Hominoidea"),
+                 levels = c("Platyrrhini", "Cercopithecoidea", "Hominoidea")),
+  x = NA, y = NA
+)
+```
+
+
+```{r}
+p_final <- p2 +
+  geom_hilight(node = 70, fill = "#8da0cb", alpha = 0.18) +
+  geom_hilight(node = 41, fill = "#66c2a5", alpha = 0.18) +
+  geom_hilight(node = 67, fill = "#fc8d62", alpha = 0.18) +
+
+  geom_tippoint(aes(size = Nmatrices),
+                shape = 21, fill = "steelblue", alpha = 0.7) +
+
+  geom_tiplab(aes(label = species_label),
+              size = 3.8, offset = 4, align = TRUE,
+              linetype = "dotted", fontface = "italic") +
+
+  # Male axis segments
+  geom_segment(data = axis_data %>% filter(!is.na(males)),
+               aes(x = seg_M_x, xend = seg_M_xend, y = y, yend = y),
+               color = "grey70", linewidth = 0.3, inherit.aes = FALSE) +
+
+  # Female axis segments
+  geom_segment(data = axis_data %>% filter(!is.na(females)),
+               aes(x = seg_F_x, xend = seg_F_xend, y = y, yend = y),
+               color = "grey70", linewidth = 0.3, inherit.aes = FALSE) +
+
+  # Male point
+  geom_point(data = axis_data %>% filter(!is.na(males)),
+             aes(x = pt_M_x, y = y),
+             color = "gold3", size = 2, inherit.aes = FALSE) +
+
+  # Female point
+  geom_point(data = axis_data %>% filter(!is.na(females)),
+             aes(x = pt_F_x, y = y),
+             color = "#443A83FF", size = 2, inherit.aes = FALSE) +
+  # Male labels
+geom_text(
+  data = axis_data %>% filter(!is.na(males)),
+  aes(x = label_M_x, y = y, label = sprintf("%.2f", males)),
+  color = "gold3",
+  hjust = 0,
+  size = 2.8,
+  fontface = "bold",
+  inherit.aes = FALSE
+) +
+
+# Female labels
+geom_text(
+  data = axis_data %>% filter(!is.na(females)),
+  aes(x = label_F_x, y = y, label = sprintf("%.2f", females)),
+  color = "#443A83FF",
+  hjust = 0,
+  size = 2.8,
+  fontface = "bold",
+  inherit.aes = FALSE
+) +
+
+
+  # Titles
+  annotate("text", x = x_axis_start_F + axis_length/2,
+         y = max(axis_data$y) + 2, label = "Females",
+         color = "#443A83FF", fontface = "bold", size = 3.5) +
+  annotate("text", x = x_axis_start_M + axis_length/2,
+         y = max(axis_data$y) + 2, label = "Males",
+         color = "gold3", fontface = "bold", size = 3.5) +
+
+  # Tick labels 0 and 1
+ annotate("text", x = x_axis_start_F,
+         y = y_tick_F + 1.2, label = "0", size = 3.2, color = "grey40") +
+annotate("text", x = x_axis_start_F + axis_length,
+         y = y_tick_F + 1.2, label = "1", size = 3.2, color = "grey40") +
+annotate("text", x = x_axis_start_M,
+         y = y_tick_M + 1.2, label = "0", size = 3.2, color = "grey40") +
+annotate("text", x = x_axis_start_M + axis_length,
+         y = y_tick_M + 1.2, label = "1", size = 3.2, color = "grey40") +
+
+  # Legend
+  geom_point(data = clade_legend,
+             aes(x = x, y = y, fill = clade),
+             shape = 22, size = 4, inherit.aes = FALSE) +
+
+  scale_fill_manual(
+    values = c("Platyrrhini" = "#8da0cb",
+               "Cercopithecoidea" = "#66c2a5",
+               "Hominoidea" = "#fc8d62"),
+    name = "Clade") +
+
+  scale_color_manual(
+    values = c("males" = "gold3", "females" = "#443A83FF"),
+    name = NULL) +
+
+  scale_size_area(
+    max_size = 6, name = "N matrices",
+    breaks = round(seq(min(data_N$Nmatrices),
+                       max(data_N$Nmatrices), length.out = 4))) +
+
+  guides(
+    fill = guide_legend(order = 1, override.aes = list(shape = 22, size = 5)),
+    size = guide_legend(order = 3)) +
+
+  ggtitle("Average steepness") +
+  
+  # A = arbre
+annotate(
+  "text",
+  x = tree_max_x / 2,
+  y = max(axis_data$y) + 4,
+  label = "A",
+  fontface = "bold",
+  size = 5.5
+) +
+
+# B = noms des espèces
+annotate(
+  "text",
+  x = tree_max_x + 7,
+  y = max(axis_data$y) + 4,
+  label = "B",
+  fontface = "bold",
+  size = 5.5
+) +
+
+# C = valeurs de steepness
+annotate(
+  "text",
+  x = x_axis_start_F - 2,
+  y = max(axis_data$y) + 4,
+  label = "C",
+  fontface = "bold",
+  size = 5.5
+) +
+
+
+  coord_cartesian(
+  xlim = c(0, x_axis_start_M + axis_length + 12),
+  clip = "off"
+) +
+
+  theme_tree() +
+scale_x_continuous(
+  breaks = c(0, 25, 50),          
+  limits = c(0, NA),
+  expand = expansion(mult = c(0, 0))
+) +
+theme(
+  axis.line.x = element_line(color = "black", linewidth = 0.4),
+  axis.ticks.x = element_line(color = "black", linewidth = 0.4),
+  axis.text.x = element_text(size = 9),
+  legend.position = c(0.08, 0.55),
+  legend.justification = c(0, 0.5),
+  legend.background = element_rect(fill = "white", color = NA),
+  plot.margin = margin(20, 40, 20, 10),
+  plot.title = element_text(hjust = 0.85, fontface = "bold", size = 15)
+)
+
+p_final
+```
+
+
+
